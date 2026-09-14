@@ -1,14 +1,26 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { prisma } from './prisma';
 import { redis } from './redis';
+import authRouter from './routes/auth';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
+// credentials: true + an explicit origin (not "*") is required for the
+// browser to send/receive the httpOnly refresh-token cookie cross-origin.
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    credentials: true,
+  }),
+);
 app.use(express.json());
+app.use(cookieParser());
+
+app.use('/auth', authRouter);
 
 app.get('/health', async (_req, res) => {
   const status = { server: 'ok', database: 'unknown', redis: 'unknown' };
@@ -29,6 +41,15 @@ app.get('/health', async (_req, res) => {
 
   const allOk = status.database === 'ok' && status.redis === 'ok';
   res.status(allOk ? 200 : 503).json(status);
+});
+
+// Must be registered after all routes. Express recognizes an error handler
+// by its 4-argument signature. Without this, an unhandled error (e.g. the
+// database being unreachable) falls through to Express's default HTML error
+// page, which also leaks internal file paths and stack traces to the client.
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error(err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(PORT, () => {
