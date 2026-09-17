@@ -31,7 +31,7 @@ export function CreateTeammateForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-slate-200 pt-4 mt-4 space-y-2">
+    <form onSubmit={handleSubmit} className="space-y-2">
       <h2 className="text-sm font-semibold text-slate-700">Add a teammate (Admin only)</h2>
       <input
         className="input"

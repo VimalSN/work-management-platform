@@ -1,10 +1,13 @@
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import { AuthForm } from './components/AuthForm';
-import { HealthStatus } from './components/HealthStatus';
-import { CreateTeammateForm } from './components/CreateTeammateForm';
+import { Layout } from './components/Layout';
+import { ProjectsListPage } from './pages/ProjectsListPage';
+import { ProjectDetailPage } from './pages/ProjectDetailPage';
+import { TeamPage } from './pages/TeamPage';
 
 function App() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -19,25 +22,15 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="bg-white shadow rounded-lg p-8 w-full max-w-md space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-slate-900">Work Management Platform</h1>
-          <button onClick={() => logout()} className="text-sm text-slate-500 hover:text-slate-800">
-            Log out
-          </button>
-        </div>
-
-        <div className="text-sm text-slate-600">
-          Signed in as <span className="font-medium text-slate-900">{user.name}</span> ({user.email}) —{' '}
-          <span className="font-medium">{user.role}</span>
-        </div>
-
-        <HealthStatus />
-
-        {user.role === 'ADMIN' && <CreateTeammateForm />}
-      </div>
-    </div>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route index element={<Navigate to="/projects" replace />} />
+        <Route path="/projects" element={<ProjectsListPage />} />
+        <Route path="/projects/:id" element={<ProjectDetailPage />} />
+        <Route path="/team" element={<TeamPage />} />
+        <Route path="*" element={<Navigate to="/projects" replace />} />
+      </Route>
+    </Routes>
   );
 }
 

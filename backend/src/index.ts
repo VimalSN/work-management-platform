@@ -5,6 +5,9 @@ import cookieParser from 'cookie-parser';
 import { prisma } from './prisma';
 import { redis } from './redis';
 import authRouter from './routes/auth';
+import projectsRouter from './routes/projects';
+import tasksRouter from './routes/tasks';
+import usersRouter from './routes/users';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -21,6 +24,9 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.use('/auth', authRouter);
+app.use('/projects', projectsRouter);
+app.use('/tasks', tasksRouter);
+app.use('/users', usersRouter);
 
 app.get('/health', async (_req, res) => {
   const status = { server: 'ok', database: 'unknown', redis: 'unknown' };

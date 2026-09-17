@@ -39,10 +39,12 @@ the server, database, and Redis is shown alongside your account info.
 
 ## Project status
 
-Building in phases; see commit history for progress. Current phase: **Phase 2 —
-authentication & RBAC** (register/login/logout, refresh token rotation with
-reuse detection, password reset, role-based middleware). See
-[docs/phase-2-auth-rbac.md](docs/phase-2-auth-rbac.md) for the design writeup.
+Building in phases; see commit history for progress. Current phase: **Phase 3 —
+multi-tenant data model & core CRUD** (Projects and Tasks, every query scoped
+by organization server-side, role- and ownership-based authorization). See
+[docs/phase-3-multitenancy-crud.md](docs/phase-3-multitenancy-crud.md) for the
+design writeup, and [docs/phase-2-auth-rbac.md](docs/phase-2-auth-rbac.md) for
+Phase 2's.
 
 ## Future work (explicitly out of scope for now)
 

@@ -25,6 +25,8 @@ model Organization {
   name      String
   createdAt DateTime @default(now())
   users     User[]
+  projects  Project[]
+  tasks     Task[]
 }
 
 model User {
@@ -40,8 +42,51 @@ model User {
   organization       Organization        @relation(fields: [organizationId], references: [id])
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
+  assignedTasks       Task[]
 
   @@index([organizationId])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  tasks        Task[]
+
+  @@index([organizationId])
+}
+
+model Task {
+  id             String     @id @default(cuid())
+  title          String
+  description    String?
+  status         TaskStatus @default(TODO)
+  organizationId String
+  projectId      String
+  assigneeId     String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  project      Project      @relation(fields: [projectId], references: [id])
+  assignee     User?        @relation(fields: [assigneeId], references: [id])
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status])
 }
 
 // The refresh token itself is never stored in plain form - only a hash of it,
