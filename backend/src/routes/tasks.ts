@@ -54,6 +54,9 @@ const updateTaskSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   status: z.nativeEnum(TaskStatus).optional(),
   assigneeId: z.string().nullable().optional(),
+  // Required: the version the client last read, so a stale write can be
+  // rejected instead of silently overwriting someone else's change.
+  version: z.number().int(),
 });
 
 router.patch('/:id', async (req: AuthenticatedRequest, res) => {
@@ -85,7 +88,7 @@ router.patch('/:id', async (req: AuthenticatedRequest, res) => {
     return;
   }
 
-  const data = { ...parsed.data };
+  const { version: clientVersion, ...data } = parsed.data;
   if (!isManager) {
     // A Developer may update status/description on their own task, but
     // renaming it or reassigning it to someone else is a Manager/Admin action.
@@ -103,7 +106,29 @@ router.patch('/:id', async (req: AuthenticatedRequest, res) => {
     }
   }
 
-  const updated = await prisma.task.update({ where: { id: task.id }, data });
+  // A single conditional UPDATE ... WHERE id = ? AND version = ? is what
+  // actually closes the race: there's no separate read-then-write gap for
+  // two concurrent requests to both slip through. If another update landed
+  // between when this client read the task and now, version won't match,
+  // count will be 0, and this request loses cleanly instead of silently
+  // overwriting the other change.
+  const result = await prisma.task.updateMany({
+    where: { id: task.id, version: clientVersion },
+    data: { ...data, version: { increment: 1 } },
+  });
+
+  if (result.count === 0) {
+    // The task itself was already confirmed to exist above, so reaching
+    // count 0 here can only mean the version didn't match - not a 404.
+    const current = await prisma.task.findUnique({ where: { id: task.id } });
+    res.status(409).json({
+      error: 'This task was modified by someone else. Refresh and try again.',
+      current,
+    });
+    return;
+  }
+
+  const updated = await prisma.task.findUnique({ where: { id: task.id } });
   res.json(updated);
 });
 

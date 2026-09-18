@@ -17,6 +17,7 @@ export type Task = {
   title: string;
   description: string | null;
   status: TaskStatus;
+  version: number;
   projectId: string;
   assigneeId: string | null;
   createdAt: string;

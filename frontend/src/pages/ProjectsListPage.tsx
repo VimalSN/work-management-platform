@@ -20,7 +20,12 @@ export function ProjectsListPage() {
   const [description, setDescription] = useState('');
 
   const createProject = useMutation({
-    mutationFn: () => api.post('/projects', { name, description: description || undefined }),
+    mutationFn: () =>
+      api.post(
+        '/projects',
+        { name, description: description || undefined },
+        { headers: { 'Idempotency-Key': crypto.randomUUID() } },
+      ),
     onSuccess: () => {
       setName('');
       setDescription('');

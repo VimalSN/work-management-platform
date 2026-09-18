@@ -74,6 +74,10 @@ model Task {
   title          String
   description    String?
   status         TaskStatus @default(TODO)
+  // Bumped on every update. A write must present the version it read; a
+  // mismatch means someone else changed the row in between (see
+  // docs/phase-5-optimistic-concurrency.md).
+  version        Int        @default(1)
   organizationId String
   projectId      String
   assigneeId     String?

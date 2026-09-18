@@ -34,10 +34,24 @@ export function ProjectDetailPage() {
     return orgUsers?.find((u) => u.id === userId)?.name || 'Unknown';
   }
 
+  const [conflictMessage, setConflictMessage] = useState<string | null>(null);
+
   const updateTask = useMutation({
-    mutationFn: (vars: { taskId: string; data: Partial<Pick<Task, 'status' | 'assigneeId'>> }) =>
+    mutationFn: (vars: { taskId: string; data: Partial<Pick<Task, 'status' | 'assigneeId'>> & { version: number } }) =>
       api.patch(`/tasks/${vars.taskId}`, vars.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] }),
+    onSuccess: () => {
+      setConflictMessage(null);
+      queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
+    },
+    onError: (err: any) => {
+      if (err.response?.status === 409) {
+        // Someone else changed this task since we last fetched it. Refetch
+        // so the dropdown reflects the real current status rather than the
+        // stale value the user was looking at when they made this edit.
+        setConflictMessage('This task was changed by someone else - showing the latest version.');
+        queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
+      }
+    },
   });
 
   const deleteTask = useMutation({
@@ -59,11 +73,15 @@ export function ProjectDetailPage() {
 
   const createTask = useMutation({
     mutationFn: () =>
-      api.post(`/projects/${id}/tasks`, {
-        title,
-        description: description || undefined,
-        assigneeId: assigneeId || undefined,
-      }),
+      api.post(
+        `/projects/${id}/tasks`,
+        { title, description: description || undefined, assigneeId: assigneeId || undefined },
+        // A fresh key per mutate() call - but if axios internally retries this
+        // exact request (e.g. after a 401 triggers a token refresh), the
+        // retry reuses this same request config/header rather than getting a
+        // new one, which is exactly the behavior idempotency keys need.
+        { headers: { 'Idempotency-Key': crypto.randomUUID() } },
+      ),
     onSuccess: () => {
       setTitle('');
       setDescription('');
@@ -89,6 +107,7 @@ export function ProjectDetailPage() {
 
       {tasksLoading && <p className="text-slate-500">Loading tasks…</p>}
       {tasks && tasks.length === 0 && <p className="text-slate-500">No tasks yet.</p>}
+      {conflictMessage && <p className="text-sm text-amber-600">{conflictMessage}</p>}
 
       {tasks && tasks.length > 0 && (
         <ul className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100">
@@ -114,7 +133,10 @@ export function ProjectDetailPage() {
                       value={task.status}
                       disabled={!canEditStatus || updateTask.isPending}
                       onChange={(e) =>
-                        updateTask.mutate({ taskId: task.id, data: { status: e.target.value as TaskStatus } })
+                        updateTask.mutate({
+                          taskId: task.id,
+                          data: { status: e.target.value as TaskStatus, version: task.version },
+                        })
                       }
                     >
                       {TASK_STATUSES.map((s) => (

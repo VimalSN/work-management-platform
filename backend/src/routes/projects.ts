@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Role, TaskStatus } from '@prisma/client';
 import { prisma } from '../prisma';
 import { AuthenticatedRequest, authenticate, authorize } from '../middleware/auth';
+import { idempotent } from '../middleware/idempotency';
 
 const router = Router();
 
@@ -23,7 +24,7 @@ const createProjectSchema = z.object({
   description: z.string().max(2000).optional(),
 });
 
-router.post('/', authorize(Role.ADMIN, Role.MANAGER), async (req: AuthenticatedRequest, res) => {
+router.post('/', authorize(Role.ADMIN, Role.MANAGER), idempotent, async (req: AuthenticatedRequest, res) => {
   const parsed = createProjectSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -130,43 +131,48 @@ const createTaskSchema = z.object({
   assigneeId: z.string().optional(),
 });
 
-router.post('/:id/tasks', authorize(Role.ADMIN, Role.MANAGER), async (req: AuthenticatedRequest, res) => {
-  const parsed = createTaskSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.flatten() });
-    return;
-  }
-
-  const project = await prisma.project.findFirst({
-    where: { id: String(req.params.id), organizationId: req.user!.organizationId },
-  });
-  if (!project) {
-    res.status(404).json({ error: 'Project not found' });
-    return;
-  }
-
-  if (parsed.data.assigneeId) {
-    // The assignee must belong to the SAME org - otherwise a Manager in org
-    // A could assign a task to a user id they guessed from org B.
-    const assignee = await prisma.user.findFirst({
-      where: { id: parsed.data.assigneeId, organizationId: req.user!.organizationId },
-    });
-    if (!assignee) {
-      res.status(400).json({ error: 'Assignee not found in this organization' });
+router.post(
+  '/:id/tasks',
+  authorize(Role.ADMIN, Role.MANAGER),
+  idempotent,
+  async (req: AuthenticatedRequest, res) => {
+    const parsed = createTaskSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-  }
 
-  const task = await prisma.task.create({
-    data: {
-      title: parsed.data.title,
-      description: parsed.data.description,
-      assigneeId: parsed.data.assigneeId,
-      projectId: project.id,
-      organizationId: req.user!.organizationId,
-    },
-  });
-  res.status(201).json(task);
-});
+    const project = await prisma.project.findFirst({
+      where: { id: String(req.params.id), organizationId: req.user!.organizationId },
+    });
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    if (parsed.data.assigneeId) {
+      // The assignee must belong to the SAME org - otherwise a Manager in
+      // org A could assign a task to a user id they guessed from org B.
+      const assignee = await prisma.user.findFirst({
+        where: { id: parsed.data.assigneeId, organizationId: req.user!.organizationId },
+      });
+      if (!assignee) {
+        res.status(400).json({ error: 'Assignee not found in this organization' });
+        return;
+      }
+    }
+
+    const task = await prisma.task.create({
+      data: {
+        title: parsed.data.title,
+        description: parsed.data.description,
+        assigneeId: parsed.data.assigneeId,
+        projectId: project.id,
+        organizationId: req.user!.organizationId,
+      },
+    });
+    res.status(201).json(task);
+  },
+);
 
 export default router;
