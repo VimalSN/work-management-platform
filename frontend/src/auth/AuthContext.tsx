@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, setAccessToken } from '../lib/api';
 
 export type Role = 'ADMIN' | 'MANAGER' | 'DEVELOPER' | 'VIEWER';
@@ -25,6 +26,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // No access token exists in memory yet on a fresh page load - but a
@@ -60,6 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await api.post('/auth/logout').catch(() => {});
     setAccessToken(null);
     setUser(null);
+    // Otherwise the browser stays on whatever URL was open (e.g. an
+    // admin-only page), and the next login - by any account - lands right
+    // back on it, since the router just re-renders whatever the current
+    // URL happens to match.
+    navigate('/projects', { replace: true });
   }
 
   return <AuthContext.Provider value={{ user, loading, login, register, logout }}>{children}</AuthContext.Provider>;

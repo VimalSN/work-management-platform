@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import { AuthForm } from './components/AuthForm';
 import { Layout } from './components/Layout';
+import { RequireRole } from './components/RequireRole';
 import { ProjectsListPage } from './pages/ProjectsListPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { TeamPage } from './pages/TeamPage';
@@ -27,7 +28,14 @@ function App() {
         <Route index element={<Navigate to="/projects" replace />} />
         <Route path="/projects" element={<ProjectsListPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
-        <Route path="/team" element={<TeamPage />} />
+        <Route
+          path="/team"
+          element={
+            <RequireRole roles={['ADMIN', 'MANAGER']}>
+              <TeamPage />
+            </RequireRole>
+          }
+        />
         <Route path="*" element={<Navigate to="/projects" replace />} />
       </Route>
     </Routes>

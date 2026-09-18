@@ -33,6 +33,29 @@ export function ProjectsListPage() {
     createProject.mutate();
   }
 
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const deleteProject = useMutation({
+    mutationFn: (projectId: string) => api.delete(`/projects/${projectId}`),
+    onSuccess: () => {
+      setDeleteError(null);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+    onError: (err: any) => {
+      setDeleteError(
+        err.response?.status === 409
+          ? 'Cannot delete a project that still has tasks - delete or reassign them first.'
+          : 'Could not delete project.',
+      );
+    },
+  });
+
+  function handleDelete(project: Project) {
+    if (window.confirm(`Delete "${project.name}"? This cannot be undone.`)) {
+      deleteProject.mutate(project.id);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold text-slate-900">Projects</h1>
@@ -41,14 +64,25 @@ export function ProjectsListPage() {
 
       {projects && projects.length === 0 && <p className="text-slate-500">No projects yet.</p>}
 
+      {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
+
       {projects && projects.length > 0 && (
         <ul className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100">
           {projects.map((project) => (
-            <li key={project.id}>
-              <Link to={`/projects/${project.id}`} className="block p-4 hover:bg-slate-50">
+            <li key={project.id} className="flex items-center justify-between p-4 hover:bg-slate-50">
+              <Link to={`/projects/${project.id}`} className="flex-1">
                 <div className="font-medium text-slate-900">{project.name}</div>
                 {project.description && <div className="text-sm text-slate-500">{project.description}</div>}
               </Link>
+              {canManage && (
+                <button
+                  onClick={() => handleDelete(project)}
+                  disabled={deleteProject.isPending}
+                  className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50 ml-4"
+                >
+                  Delete
+                </button>
+              )}
             </li>
           ))}
         </ul>

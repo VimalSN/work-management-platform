@@ -39,6 +39,17 @@ export function ProjectDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] }),
   });
 
+  const deleteTask = useMutation({
+    mutationFn: (taskId: string) => api.delete(`/tasks/${taskId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] }),
+  });
+
+  function handleDeleteTask(task: Task) {
+    if (window.confirm(`Delete "${task.title}"? This cannot be undone.`)) {
+      deleteTask.mutate(task.id);
+    }
+  }
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
@@ -87,20 +98,31 @@ export function ProjectDetailPage() {
                   {task.description && <div className="text-sm text-slate-500">{task.description}</div>}
                   <div className="text-xs text-slate-400 mt-1">Assigned to {userName(task.assigneeId)}</div>
                 </div>
-                <select
-                  className="input w-40"
-                  value={task.status}
-                  disabled={!canEditStatus || updateTask.isPending}
-                  onChange={(e) =>
-                    updateTask.mutate({ taskId: task.id, data: { status: e.target.value as TaskStatus } })
-                  }
-                >
-                  {TASK_STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center gap-3">
+                  <select
+                    className="input w-40"
+                    value={task.status}
+                    disabled={!canEditStatus || updateTask.isPending}
+                    onChange={(e) =>
+                      updateTask.mutate({ taskId: task.id, data: { status: e.target.value as TaskStatus } })
+                    }
+                  >
+                    {TASK_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  {canManage && (
+                    <button
+                      onClick={() => handleDeleteTask(task)}
+                      disabled={deleteTask.isPending}
+                      className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
               </li>
             );
           })}

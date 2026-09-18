@@ -46,6 +46,13 @@ by organization server-side, role- and ownership-based authorization). See
 design writeup, and [docs/phase-2-auth-rbac.md](docs/phase-2-auth-rbac.md) for
 Phase 2's.
 
+## UI approach
+
+The frontend stays functional-only (plain Tailwind utility classes, no design
+system) through the core phases - each phase builds just enough UI to
+exercise its backend feature in a browser. A dedicated visual/UX polish pass
+is planned once all features exist, rather than spread across every phase.
+
 ## Future work (explicitly out of scope for now)
 
 Full recommendation/ML engine, complete audit logging, load testing suite,
