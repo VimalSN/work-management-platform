@@ -2,14 +2,23 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { FolderKanban, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
+import { useToast } from '../components/ui/ToastContext';
+import { useConfirm } from '../components/ui/ConfirmContext';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { RowMenu } from '../components/ui/RowMenu';
 import type { Project } from '../types';
 
 export function ProjectsListPage() {
   const { user } = useAuth();
   const canManage = user?.role === 'ADMIN' || user?.role === 'MANAGER';
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -30,7 +39,9 @@ export function ProjectsListPage() {
       setName('');
       setDescription('');
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      showToast('success', 'Project created');
     },
+    onError: () => showToast('error', 'Could not create project'),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -38,16 +49,15 @@ export function ProjectsListPage() {
     createProject.mutate();
   }
 
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
   const deleteProject = useMutation({
     mutationFn: (projectId: string) => api.delete(`/projects/${projectId}`),
     onSuccess: () => {
-      setDeleteError(null);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      showToast('success', 'Project deleted');
     },
     onError: (err: any) => {
-      setDeleteError(
+      showToast(
+        'error',
         err.response?.status === 409
           ? 'Cannot delete a project that still has tasks - delete or reassign them first.'
           : 'Could not delete project.',
@@ -55,69 +65,68 @@ export function ProjectsListPage() {
     },
   });
 
-  function handleDelete(project: Project) {
-    if (window.confirm(`Delete "${project.name}"? This cannot be undone.`)) {
-      deleteProject.mutate(project.id);
-    }
+  async function handleDelete(project: Project) {
+    const confirmed = await confirm({
+      title: 'Delete project',
+      message: `Delete "${project.name}"? This cannot be undone.`,
+      danger: true,
+    });
+    if (confirmed) deleteProject.mutate(project.id);
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-slate-900">Projects</h1>
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">Projects</h1>
+        <p className="text-sm text-slate-500">Everything your organization is working on.</p>
+      </div>
 
       {isLoading && <p className="text-slate-500">Loading projects…</p>}
-
       {projects && projects.length === 0 && <p className="text-slate-500">No projects yet.</p>}
 
-      {deleteError && <p className="text-sm text-red-600">{deleteError}</p>}
-
       {projects && projects.length > 0 && (
-        <ul className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {projects.map((project) => (
-            <li key={project.id} className="flex items-center justify-between p-4 hover:bg-slate-50">
-              <Link to={`/projects/${project.id}`} className="flex-1">
-                <div className="font-medium text-slate-900">{project.name}</div>
-                {project.description && <div className="text-sm text-slate-500">{project.description}</div>}
-              </Link>
-              {canManage && (
-                <button
-                  onClick={() => handleDelete(project)}
-                  disabled={deleteProject.isPending}
-                  className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50 ml-4"
-                >
-                  Delete
-                </button>
-              )}
-            </li>
+            <Card key={project.id} className="p-4 flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-2">
+                <Link to={`/projects/${project.id}`} className="flex items-center gap-2 flex-1 min-w-0">
+                  <FolderKanban className="w-5 h-5 text-brand-600 flex-shrink-0" />
+                  <span className="font-medium text-slate-900 truncate">{project.name}</span>
+                </Link>
+                {canManage && (
+                  <RowMenu
+                    items={[
+                      {
+                        label: 'Delete',
+                        icon: <Trash2 className="w-4 h-4" />,
+                        danger: true,
+                        onClick: () => handleDelete(project),
+                      },
+                    ]}
+                  />
+                )}
+              </div>
+              {project.description && <p className="text-sm text-slate-500 line-clamp-2">{project.description}</p>}
+            </Card>
           ))}
-        </ul>
+        </div>
       )}
 
       {canManage && (
-        <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-lg p-4 space-y-2 max-w-sm">
-          <h2 className="text-sm font-semibold text-slate-700">New project</h2>
-          <input
-            className="input"
-            placeholder="Project name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-          <input
-            className="input"
-            placeholder="Description (optional)"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-          <button
-            type="submit"
-            disabled={createProject.isPending}
-            className="w-full bg-slate-900 text-white rounded py-2 text-sm font-medium disabled:opacity-50"
-          >
-            {createProject.isPending ? 'Creating…' : 'Create project'}
-          </button>
-          {createProject.isError && <p className="text-sm text-red-600">Could not create project</p>}
-        </form>
+        <Card className="p-4 max-w-sm">
+          <form onSubmit={handleSubmit} className="space-y-2">
+            <h2 className="text-sm font-semibold text-slate-700">New project</h2>
+            <Input placeholder="Project name" value={name} onChange={(e) => setName(e.target.value)} required />
+            <Input
+              placeholder="Description (optional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <Button type="submit" loading={createProject.isPending} className="w-full">
+              Create project
+            </Button>
+          </form>
+        </Card>
       )}
     </div>
   );

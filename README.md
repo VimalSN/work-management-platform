@@ -1,8 +1,11 @@
-# Work Management Platform
+# Meridian
 
 A multi-tenant, dependency-aware engineering task and project management platform,
 built phase by phase with a focus on real system-design patterns: multi-tenancy,
 dependency-graph cycle detection, optimistic concurrency, and real-time collaboration.
+
+(The repo/clone URL below still uses its original name, "work-management-platform" -
+only the product name shown in the app itself changed to Meridian.)
 
 ## Stack
 
@@ -49,12 +52,15 @@ See [docs/phase-7-workload-notifications.md](docs/phase-7-workload-notifications
 for the design writeup, and the other `docs/phase-*.md` files for earlier
 phases.
 
-## UI approach
+## UI
 
-The frontend stays functional-only (plain Tailwind utility classes, no design
-system) through the core phases - each phase builds just enough UI to
-exercise its backend feature in a browser. A dedicated visual/UX polish pass
-is planned once all features exist, rather than spread across every phase.
+Phases 1-7 kept the frontend deliberately functional-only. With all
+user-facing features complete, a dedicated design pass followed: a shared
+component library (Button/Input/Select/Badge/Card/RowMenu), a brand
+color theme, icons throughout (lucide-react), toast notifications and a
+custom confirm dialog (replacing native alert/confirm), a drag-and-drop
+Kanban board for tasks (@dnd-kit), a dashboard landing page, and a
+responsive layout (hamburger + slide-out menu below the `md` breakpoint).
 
 ## Future work (explicitly out of scope for now)
 

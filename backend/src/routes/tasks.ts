@@ -14,11 +14,15 @@ router.use(authenticate);
 
 const listTasksQuerySchema = z.object({
   search: z.string().max(200).optional(),
+  assigneeId: z.string().optional(),
 });
 
-// Used by the frontend's "link to another task" picker - dependencies can
+// Used by the frontend's "link to another task" picker (dependencies can
 // cross projects, so this isn't scoped to a single project like
-// GET /projects/:id/tasks is.
+// GET /projects/:id/tasks is) and by the dashboard's "my tasks" view
+// (assigneeId filter - filtering server-side rather than fetching
+// everything and checking client-side means a user's tasks are found even
+// if the org has more than the `take` limit below).
 router.get('/', async (req: AuthenticatedRequest, res) => {
   const parsedQuery = listTasksQuerySchema.safeParse(req.query);
   if (!parsedQuery.success) {
@@ -29,11 +33,12 @@ router.get('/', async (req: AuthenticatedRequest, res) => {
   const tasks = await prisma.task.findMany({
     where: {
       organizationId: req.user!.organizationId,
+      assigneeId: parsedQuery.data.assigneeId,
       ...(parsedQuery.data.search
         ? { title: { contains: parsedQuery.data.search, mode: 'insensitive' as const } }
         : {}),
     },
-    select: { id: true, title: true, status: true, projectId: true },
+    select: { id: true, title: true, status: true, projectId: true, assigneeId: true, estimatedHours: true },
     orderBy: { createdAt: 'desc' },
     take: 50,
   });

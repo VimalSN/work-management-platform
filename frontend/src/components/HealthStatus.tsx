@@ -25,29 +25,27 @@ export function HealthStatus() {
   });
 
   if (error) {
-    return <p className="text-red-600 text-sm">Could not reach backend</p>;
+    return <p className="text-red-600 text-xs py-2">Could not reach backend</p>;
   }
   if (!data) {
-    return <p className="text-slate-500 text-sm">Checking system status…</p>;
+    return <p className="text-slate-500 text-xs py-2">Checking system status…</p>;
   }
 
   return (
-    <ul className="space-y-1">
-      <StatusRow label="Server" value={data.server} />
-      <StatusRow label="Database" value={data.database} />
-      <StatusRow label="Redis" value={data.redis} />
-    </ul>
+    <div className="flex items-center gap-4 py-2 text-xs">
+      <StatusDot label="Server" value={data.server} />
+      <StatusDot label="Database" value={data.database} />
+      <StatusDot label="Redis" value={data.redis} />
+    </div>
   );
 }
 
-function StatusRow({ label, value }: { label: string; value: string }) {
+function StatusDot({ label, value }: { label: string; value: string }) {
   const ok = value === 'ok';
   return (
-    <li className="flex items-center justify-between text-sm">
-      <span className="text-slate-600">{label}</span>
-      <span className={`px-2 py-0.5 rounded font-medium ${ok ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-        {value}
-      </span>
-    </li>
+    <span className="flex items-center gap-1.5 text-slate-500">
+      <span className={`w-2 h-2 rounded-full ${ok ? 'bg-green-500' : 'bg-red-500'}`} />
+      {label}
+    </span>
   );
 }

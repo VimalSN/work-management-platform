@@ -3,11 +3,15 @@ import type { FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useSocket } from '../socket/SocketContext';
+import { useToast } from './ui/ToastContext';
+import { Button } from './ui/Button';
+import { Input } from './ui/Input';
 import type { Comment } from '../types';
 
 export function TaskComments({ taskId, canComment }: { taskId: string; canComment: boolean }) {
   const queryClient = useQueryClient();
   const socket = useSocket();
+  const { showToast } = useToast();
 
   const { data: comments } = useQuery({
     queryKey: ['tasks', taskId, 'comments'],
@@ -46,6 +50,7 @@ export function TaskComments({ taskId, canComment }: { taskId: string; canCommen
       setBody('');
       queryClient.invalidateQueries({ queryKey: ['tasks', taskId, 'comments'] });
     },
+    onError: () => showToast('error', 'Could not post comment'),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -54,7 +59,7 @@ export function TaskComments({ taskId, canComment }: { taskId: string; canCommen
   }
 
   return (
-    <div className="mt-3 pl-4 border-l-2 border-slate-100 space-y-2 text-sm">
+    <div className="space-y-2 text-sm">
       <div className="space-y-1">
         {comments?.length === 0 && <p className="text-slate-400">No comments yet.</p>}
         {comments?.map((c) => (
@@ -65,19 +70,15 @@ export function TaskComments({ taskId, canComment }: { taskId: string; canCommen
       </div>
       {canComment && (
         <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            className="input flex-1"
+          <Input
+            className="flex-1"
             placeholder="Add a comment…"
             value={body}
             onChange={(e) => setBody(e.target.value)}
           />
-          <button
-            type="submit"
-            disabled={addComment.isPending || !body.trim()}
-            className="text-sm bg-slate-900 text-white rounded px-3 py-1.5 disabled:opacity-50"
-          >
+          <Button type="submit" disabled={!body.trim()} loading={addComment.isPending}>
             Post
-          </button>
+          </Button>
         </form>
       )}
     </div>

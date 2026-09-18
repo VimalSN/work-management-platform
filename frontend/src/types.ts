@@ -43,6 +43,8 @@ export type TaskSummary = {
   title: string;
   status: TaskStatus;
   projectId: string;
+  assigneeId?: string | null;
+  estimatedHours?: number | null;
 };
 
 export type DependencyItem = {

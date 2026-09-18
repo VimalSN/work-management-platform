@@ -9,7 +9,7 @@ import type { Role } from '../auth/AuthContext';
 export function RequireRole({ roles, children }: { roles: Role[]; children: ReactNode }) {
   const { user } = useAuth();
   if (!user || !roles.includes(user.role)) {
-    return <Navigate to="/projects" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
   return <>{children}</>;
 }

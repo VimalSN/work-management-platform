@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // admin-only page), and the next login - by any account - lands right
     // back on it, since the router just re-renders whatever the current
     // URL happens to match.
-    navigate('/projects', { replace: true });
+    navigate('/dashboard', { replace: true });
   }
 
   return <AuthContext.Provider value={{ user, loading, login, register, logout }}>{children}</AuthContext.Provider>;

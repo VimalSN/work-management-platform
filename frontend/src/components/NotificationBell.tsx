@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Bell } from 'lucide-react';
 import { api } from '../lib/api';
 import { useSocket } from '../socket/SocketContext';
 import type { AppNotification } from '../types';
@@ -8,6 +9,7 @@ export function NotificationBell() {
   const socket = useSocket();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
   const { data: notifications } = useQuery({
     queryKey: ['notifications'],
@@ -31,6 +33,14 @@ export function NotificationBell() {
     };
   }, [socket, queryClient]);
 
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const markRead = useMutation({
     mutationFn: (id: string) => api.patch(`/notifications/${id}/read`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
@@ -44,25 +54,26 @@ export function NotificationBell() {
   const unreadCount = notifications?.filter((n) => !n.read).length ?? 0;
 
   return (
-    <div className="relative">
-      <button onClick={() => setOpen(!open)} className="relative text-slate-500 hover:text-slate-800 text-sm">
-        Notifications
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="relative text-slate-500 hover:text-slate-800 p-1.5 rounded-md hover:bg-slate-100"
+        aria-label="Notifications"
+      >
+        <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="ml-1 inline-flex items-center justify-center bg-red-600 text-white text-xs rounded-full w-5 h-5">
-            {unreadCount}
+          <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center bg-red-600 text-white text-[10px] font-medium rounded-full w-4 h-4">
+            {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-lg shadow-lg z-10">
+        <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-lg shadow-lg z-20">
           <div className="flex items-center justify-between p-3 border-b border-slate-100">
             <span className="text-sm font-semibold text-slate-700">Notifications</span>
             {unreadCount > 0 && (
-              <button
-                onClick={() => markAllRead.mutate()}
-                className="text-xs text-slate-500 hover:text-slate-800"
-              >
+              <button onClick={() => markAllRead.mutate()} className="text-xs text-brand-600 hover:text-brand-800">
                 Mark all read
               </button>
             )}

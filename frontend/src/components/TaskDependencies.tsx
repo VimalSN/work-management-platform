@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { X } from 'lucide-react';
 import { api } from '../lib/api';
+import { useToast } from './ui/ToastContext';
+import { Button } from './ui/Button';
+import { Input, Select } from './ui/Input';
 import { DEPENDENCY_LINK_TYPES } from '../types';
 import type { DependencyItem, DependencyLinkType, TaskDependencies as TaskDependenciesData, TaskSummary } from '../types';
 
@@ -15,6 +19,7 @@ const SECTIONS: { label: string; key: keyof TaskDependenciesData }[] = [
 
 export function TaskDependencies({ taskId, canManage }: { taskId: string; canManage: boolean }) {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const { data } = useQuery({
     queryKey: ['tasks', taskId, 'dependencies'],
@@ -40,11 +45,16 @@ export function TaskDependencies({ taskId, canManage }: { taskId: string; canMan
       setSelectedTaskId('');
       invalidate();
     },
+    onError: (err: any) => {
+      const errorData = err.response?.data?.error;
+      showToast('error', typeof errorData === 'string' ? errorData : 'Could not create dependency');
+    },
   });
 
   const removeDependency = useMutation({
     mutationFn: (dependencyId: string) => api.delete(`/tasks/${taskId}/dependencies/${dependencyId}`),
     onSuccess: invalidate,
+    onError: () => showToast('error', 'Could not remove dependency'),
   });
 
   function handleAdd(e: FormEvent) {
@@ -52,13 +62,8 @@ export function TaskDependencies({ taskId, canManage }: { taskId: string; canMan
     if (selectedTaskId) addDependency.mutate();
   }
 
-  const addErrorMessage = (() => {
-    const errorData = (addDependency.error as any)?.response?.data?.error;
-    return typeof errorData === 'string' ? errorData : addDependency.isError ? 'Could not create dependency' : null;
-  })();
-
   return (
-    <div className="mt-2 pl-4 border-l-2 border-slate-100 space-y-2 text-sm">
+    <div className="space-y-2 text-sm">
       {SECTIONS.map(({ label, key }) => {
         const items: DependencyItem[] = data?.[key] ?? [];
         if (items.length === 0) return null;
@@ -77,8 +82,9 @@ export function TaskDependencies({ taskId, canManage }: { taskId: string; canMan
                     disabled={removeDependency.isPending}
                     className="text-slate-400 hover:text-red-600"
                     aria-label={`Remove ${label.toLowerCase()} link to ${item.task.title}`}
+                    type="button"
                   >
-                    ×
+                    <X className="w-3 h-3" />
                   </button>
                 )}
               </span>
@@ -89,8 +95,8 @@ export function TaskDependencies({ taskId, canManage }: { taskId: string; canMan
 
       {canManage && (
         <form onSubmit={handleAdd} className="flex items-center gap-2 flex-wrap pt-1">
-          <input
-            className="input w-48"
+          <Input
+            className="w-48"
             placeholder="Search tasks to link…"
             value={search}
             onChange={(e) => {
@@ -99,11 +105,7 @@ export function TaskDependencies({ taskId, canManage }: { taskId: string; canMan
             }}
           />
           {search.trim().length > 1 && (
-            <select
-              className="input w-48"
-              value={selectedTaskId}
-              onChange={(e) => setSelectedTaskId(e.target.value)}
-            >
+            <Select className="w-48" value={selectedTaskId} onChange={(e) => setSelectedTaskId(e.target.value)}>
               <option value="">Select a task…</option>
               {searchResults
                 ?.filter((t) => t.id !== taskId)
@@ -112,25 +114,20 @@ export function TaskDependencies({ taskId, canManage }: { taskId: string; canMan
                     {t.title}
                   </option>
                 ))}
-            </select>
+            </Select>
           )}
-          <select className="input w-36" value={type} onChange={(e) => setType(e.target.value as DependencyLinkType)}>
+          <Select className="w-36" value={type} onChange={(e) => setType(e.target.value as DependencyLinkType)}>
             {DEPENDENCY_LINK_TYPES.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
             ))}
-          </select>
-          <button
-            type="submit"
-            disabled={!selectedTaskId || addDependency.isPending}
-            className="text-sm bg-slate-900 text-white rounded px-3 py-1.5 disabled:opacity-50"
-          >
+          </Select>
+          <Button type="submit" disabled={!selectedTaskId} loading={addDependency.isPending}>
             Link
-          </button>
+          </Button>
         </form>
       )}
-      {addErrorMessage && <p className="text-red-600">{addErrorMessage}</p>}
     </div>
   );
 }

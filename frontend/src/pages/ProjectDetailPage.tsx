@@ -2,14 +2,29 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import { Plus } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { useSocket } from '../socket/SocketContext';
+import { useToast } from '../components/ui/ToastContext';
 import { debounce } from '../lib/debounce';
-import { TaskDependencies } from '../components/TaskDependencies';
-import { TaskComments } from '../components/TaskComments';
+import { TaskCard } from '../components/TaskCard';
+import { TaskColumn } from '../components/TaskColumn';
+import { TaskDetailModal } from '../components/TaskDetailModal';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Input, Select } from '../components/ui/Input';
 import { TASK_STATUSES } from '../types';
 import type { OrgUser, Project, Task, TaskStatus } from '../types';
+
+const COLUMN_LABELS: Record<TaskStatus, string> = {
+  TODO: 'To do',
+  IN_PROGRESS: 'In progress',
+  IN_REVIEW: 'In review',
+  DONE: 'Done',
+};
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +33,7 @@ export function ProjectDetailPage() {
   const canComment = user?.role !== 'VIEWER';
   const queryClient = useQueryClient();
   const socket = useSocket();
+  const { showToast } = useToast();
 
   const { data: project } = useQuery({
     queryKey: ['projects', id],
@@ -74,8 +90,6 @@ export function ProjectDetailPage() {
     return orgUsers?.find((u) => u.id === userId)?.name || 'Unknown';
   }
 
-  const [conflictMessage, setConflictMessage] = useState<string | null>(null);
-
   const updateTask = useMutation({
     mutationFn: (vars: { taskId: string; data: Partial<Pick<Task, 'status' | 'assigneeId'>> & { version: number } }) =>
       api.patch(`/tasks/${vars.taskId}`, vars.data),
@@ -83,17 +97,14 @@ export function ProjectDetailPage() {
       await queryClient.cancelQueries({ queryKey: ['projects', id, 'tasks'] });
       const previousTasks = queryClient.getQueryData<Task[]>(['projects', id, 'tasks']);
       // Optimistic UI: apply the change to the local cache immediately,
-      // before the server has confirmed anything, so the dropdown reflects
-      // the click right away instead of visibly lagging behind it. If the
-      // request fails, onError below restores previousTasks - the guess
-      // was wrong, so showing it any longer would be a lie.
+      // before the server has confirmed anything. If the request fails,
+      // onError below restores previousTasks.
       queryClient.setQueryData<Task[]>(['projects', id, 'tasks'], (old) =>
         old?.map((t) => (t.id === vars.taskId ? { ...t, ...vars.data } : t)),
       );
       return { previousTasks };
     },
     onSuccess: () => {
-      setConflictMessage(null);
       queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
     },
     onError: (err: any, _vars, context) => {
@@ -102,31 +113,49 @@ export function ProjectDetailPage() {
       }
       if (err.response?.status === 409) {
         // Someone else changed this task since we last fetched it. Refetch
-        // so the dropdown reflects the real current status rather than the
-        // stale value the user was looking at when they made this edit.
-        setConflictMessage('This task was changed by someone else - showing the latest version.');
+        // so the board reflects the real current state.
+        showToast('error', 'This task was changed by someone else - showing the latest version.');
         queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
+      } else {
+        showToast('error', 'Could not update task');
       }
     },
   });
 
   const deleteTask = useMutation({
     mutationFn: (taskId: string) => api.delete(`/tasks/${taskId}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
+      showToast('success', 'Task deleted');
+      setSelectedTaskId(null);
+    },
+    onError: () => showToast('error', 'Could not delete task'),
   });
 
-  function handleDeleteTask(task: Task) {
-    if (window.confirm(`Delete "${task.title}"? This cannot be undone.`)) {
-      deleteTask.mutate(task.id);
-    }
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const selectedTask = tasks?.find((t) => t.id === selectedTaskId) ?? null;
+
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const activeDragTask = tasks?.find((t) => t.id === activeDragId) ?? null;
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragId(String(event.active.id));
   }
 
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveDragId(null);
+    const taskId = String(event.active.id);
+    const newStatus = event.over?.id as TaskStatus | undefined;
+    const task = tasks?.find((t) => t.id === taskId);
+    if (!task || !newStatus || task.status === newStatus) return;
+    updateTask.mutate({ taskId, data: { status: newStatus, version: task.version } });
+  }
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const createTask = useMutation({
     mutationFn: () =>
@@ -149,8 +178,11 @@ export function ProjectDetailPage() {
       setDescription('');
       setAssigneeId('');
       setEstimatedHours('');
+      setShowCreateForm(false);
       queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
+      showToast('success', 'Task created');
     },
+    onError: () => showToast('error', 'Could not create task'),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -160,122 +192,107 @@ export function ProjectDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link to="/projects" className="text-sm text-slate-500 hover:text-slate-800">
-          ← All projects
-        </Link>
-        <h1 className="text-xl font-semibold text-slate-900">{project?.name ?? 'Project'}</h1>
-        {project?.description && <p className="text-sm text-slate-500">{project.description}</p>}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link to="/projects" className="text-sm text-slate-500 hover:text-slate-800">
+            ← All projects
+          </Link>
+          <h1 className="text-xl font-semibold text-slate-900">{project?.name ?? 'Project'}</h1>
+          {project?.description && <p className="text-sm text-slate-500">{project.description}</p>}
+        </div>
+        {canManage && (
+          <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowCreateForm((s) => !s)}>
+            New task
+          </Button>
+        )}
       </div>
 
-      {tasksLoading && <p className="text-slate-500">Loading tasks…</p>}
-      {tasks && tasks.length === 0 && <p className="text-slate-500">No tasks yet.</p>}
-      {conflictMessage && <p className="text-sm text-amber-600">{conflictMessage}</p>}
-
-      {tasks && tasks.length > 0 && (
-        <ul className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100">
-          {tasks.map((task) => {
-            const canEditStatus = canManage || user?.id === task.assigneeId;
-            return (
-              <li key={task.id} className="p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="font-medium text-slate-900">{task.title}</div>
-                    {task.description && <div className="text-sm text-slate-500">{task.description}</div>}
-                    <div className="text-xs text-slate-400 mt-1">
-                      Assigned to {userName(task.assigneeId)}
-                      {task.estimatedHours != null && ` · ${task.estimatedHours}h estimated`}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
-                      className="text-sm text-slate-500 hover:text-slate-800"
-                    >
-                      {expandedTaskId === task.id ? 'Hide' : 'Details'}
-                    </button>
-                    <select
-                      className="input w-40"
-                      value={task.status}
-                      disabled={!canEditStatus || updateTask.isPending}
-                      onChange={(e) =>
-                        updateTask.mutate({
-                          taskId: task.id,
-                          data: { status: e.target.value as TaskStatus, version: task.version },
-                        })
-                      }
-                    >
-                      {TASK_STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                    {canManage && (
-                      <button
-                        onClick={() => handleDeleteTask(task)}
-                        disabled={deleteTask.isPending}
-                        className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {expandedTaskId === task.id && (
-                  <>
-                    <TaskDependencies taskId={task.id} canManage={canManage} />
-                    <TaskComments taskId={task.id} canComment={canComment} />
-                  </>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+      {canManage && showCreateForm && (
+        <Card className="p-4 max-w-md">
+          <form onSubmit={handleSubmit} className="space-y-2">
+            <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
+            <Input
+              placeholder="Description (optional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <Select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+              <option value="">Unassigned</option>
+              {orgUsers?.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.role})
+                </option>
+              ))}
+            </Select>
+            <Input
+              type="number"
+              min="0"
+              step="0.5"
+              placeholder="Estimated hours (optional)"
+              value={estimatedHours}
+              onChange={(e) => setEstimatedHours(e.target.value)}
+            />
+            <Button type="submit" loading={createTask.isPending} className="w-full">
+              Create task
+            </Button>
+          </form>
+        </Card>
       )}
 
-      {canManage && (
-        <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-lg p-4 space-y-2 max-w-sm">
-          <h2 className="text-sm font-semibold text-slate-700">New task</h2>
-          <input
-            className="input"
-            placeholder="Title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-          />
-          <input
-            className="input"
-            placeholder="Description (optional)"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-          <select className="input" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-            <option value="">Unassigned</option>
-            {orgUsers?.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.role})
-              </option>
-            ))}
-          </select>
-          <input
-            className="input"
-            type="number"
-            min="0"
-            step="0.5"
-            placeholder="Estimated hours (optional)"
-            value={estimatedHours}
-            onChange={(e) => setEstimatedHours(e.target.value)}
-          />
-          <button
-            type="submit"
-            disabled={createTask.isPending}
-            className="w-full bg-slate-900 text-white rounded py-2 text-sm font-medium disabled:opacity-50"
-          >
-            {createTask.isPending ? 'Creating…' : 'Create task'}
-          </button>
-          {createTask.isError && <p className="text-sm text-red-600">Could not create task</p>}
-        </form>
+      {tasksLoading && <p className="text-slate-500">Loading tasks…</p>}
+
+      {tasks && (
+        <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="flex gap-4 overflow-x-auto pb-2">
+            {TASK_STATUSES.map((status) => {
+              const columnTasks = tasks.filter((t) => t.status === status);
+              return (
+                <TaskColumn key={status} status={status} label={COLUMN_LABELS[status]} count={columnTasks.length}>
+                  {columnTasks.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      assigneeName={userName(task.assigneeId)}
+                      draggable={canManage || user?.id === task.assigneeId}
+                      onOpen={() => setSelectedTaskId(task.id)}
+                    />
+                  ))}
+                </TaskColumn>
+              );
+            })}
+          </div>
+          <DragOverlay>
+            {activeDragTask && (
+              <TaskCard
+                task={activeDragTask}
+                assigneeName={userName(activeDragTask.assigneeId)}
+                draggable
+                onOpen={() => {}}
+              />
+            )}
+          </DragOverlay>
+        </DndContext>
+      )}
+
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          orgUsers={orgUsers ?? []}
+          canManage={canManage}
+          canEditStatus={canManage || user?.id === selectedTask.assigneeId}
+          canComment={canComment}
+          onClose={() => setSelectedTaskId(null)}
+          onUpdateStatus={(status) => updateTask.mutate({ taskId: selectedTask.id, data: { status, version: selectedTask.version } })}
+          onUpdateAssignee={(newAssigneeId) =>
+            updateTask.mutate({
+              taskId: selectedTask.id,
+              data: { assigneeId: newAssigneeId || null, version: selectedTask.version },
+            })
+          }
+          onDelete={() => deleteTask.mutate(selectedTask.id)}
+          isUpdating={updateTask.isPending}
+          isDeleting={deleteTask.isPending}
+        />
       )}
     </div>
   );

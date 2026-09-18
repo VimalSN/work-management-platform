@@ -1,7 +1,24 @@
 @import "tailwindcss";
 
+/* Named "brand" rather than reusing Tailwind's "indigo" directly in every
+   component - changing the app's accent later means editing these values
+   once, not hunting for every bg-indigo-* class across the codebase. */
+@theme {
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #312e81;
+}
+
 @layer components {
   .input {
-    @apply mt-1 w-full rounded border border-slate-300 px-3 py-2 text-slate-900;
+    @apply mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900
+      focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500;
   }
 }

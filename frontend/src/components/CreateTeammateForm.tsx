@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { useToast } from './ui/ToastContext';
+import { Button } from './ui/Button';
+import { Input, Select } from './ui/Input';
 import type { Role } from '../auth/AuthContext';
 
 const ROLES: Role[] = ['ADMIN', 'MANAGER', 'DEVELOPER', 'VIEWER'];
@@ -10,6 +13,8 @@ const ROLES: Role[] = ['ADMIN', 'MANAGER', 'DEVELOPER', 'VIEWER'];
 // just that it exists. A non-admin never sees this - the backend would
 // reject the request with 403 even if they somehow called it directly.
 export function CreateTeammateForm() {
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,7 +27,10 @@ export function CreateTeammateForm() {
       setEmail('');
       setPassword('');
       setRole('DEVELOPER');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      showToast('success', 'Teammate added');
     },
+    onError: () => showToast('error', 'Could not add teammate'),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -33,23 +41,15 @@ export function CreateTeammateForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-2">
       <h2 className="text-sm font-semibold text-slate-700">Add a teammate (Admin only)</h2>
-      <input
-        className="input"
-        placeholder="Name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-      />
-      <input
-        className="input"
+      <Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+      <Input
         type="email"
         placeholder="Email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         required
       />
-      <input
-        className="input"
+      <Input
         type="password"
         placeholder="Temporary password"
         value={password}
@@ -57,22 +57,16 @@ export function CreateTeammateForm() {
         minLength={8}
         required
       />
-      <select className="input" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+      <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
         {ROLES.map((r) => (
           <option key={r} value={r}>
             {r}
           </option>
         ))}
-      </select>
-      <button
-        type="submit"
-        disabled={mutation.isPending}
-        className="w-full bg-slate-900 text-white rounded py-2 text-sm font-medium disabled:opacity-50"
-      >
-        {mutation.isPending ? 'Adding…' : 'Add teammate'}
-      </button>
-      {mutation.isError && <p className="text-sm text-red-600">Could not add teammate</p>}
-      {mutation.isSuccess && <p className="text-sm text-green-600">Teammate added</p>}
+      </Select>
+      <Button type="submit" loading={mutation.isPending} className="w-full">
+        Add teammate
+      </Button>
     </form>
   );
 }

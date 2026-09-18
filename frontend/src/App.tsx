@@ -7,6 +7,7 @@ import { ProjectsListPage } from './pages/ProjectsListPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { TeamPage } from './pages/TeamPage';
 import { WorkloadPage } from './pages/WorkloadPage';
+import { DashboardPage } from './pages/DashboardPage';
 
 function App() {
   const { user, loading } = useAuth();
@@ -26,7 +27,8 @@ function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Navigate to="/projects" replace />} />
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/projects" element={<ProjectsListPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
         <Route path="/workload" element={<WorkloadPage />} />
@@ -38,7 +40,7 @@ function App() {
             </RequireRole>
           }
         />
-        <Route path="*" element={<Navigate to="/projects" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
   );
