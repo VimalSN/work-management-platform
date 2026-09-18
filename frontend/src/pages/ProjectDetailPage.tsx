@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
+import { TaskDependencies } from '../components/TaskDependencies';
 import { TASK_STATUSES } from '../types';
 import type { OrgUser, Project, Task, TaskStatus } from '../types';
 
@@ -50,6 +51,8 @@ export function ProjectDetailPage() {
     }
   }
 
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
@@ -92,37 +95,46 @@ export function ProjectDetailPage() {
           {tasks.map((task) => {
             const canEditStatus = canManage || user?.id === task.assigneeId;
             return (
-              <li key={task.id} className="p-4 flex items-center justify-between gap-4">
-                <div>
-                  <div className="font-medium text-slate-900">{task.title}</div>
-                  {task.description && <div className="text-sm text-slate-500">{task.description}</div>}
-                  <div className="text-xs text-slate-400 mt-1">Assigned to {userName(task.assigneeId)}</div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <select
-                    className="input w-40"
-                    value={task.status}
-                    disabled={!canEditStatus || updateTask.isPending}
-                    onChange={(e) =>
-                      updateTask.mutate({ taskId: task.id, data: { status: e.target.value as TaskStatus } })
-                    }
-                  >
-                    {TASK_STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                  {canManage && (
+              <li key={task.id} className="p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div className="font-medium text-slate-900">{task.title}</div>
+                    {task.description && <div className="text-sm text-slate-500">{task.description}</div>}
+                    <div className="text-xs text-slate-400 mt-1">Assigned to {userName(task.assigneeId)}</div>
+                  </div>
+                  <div className="flex items-center gap-3">
                     <button
-                      onClick={() => handleDeleteTask(task)}
-                      disabled={deleteTask.isPending}
-                      className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
+                      onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
+                      className="text-sm text-slate-500 hover:text-slate-800"
                     >
-                      Delete
+                      {expandedTaskId === task.id ? 'Hide' : 'Dependencies'}
                     </button>
-                  )}
+                    <select
+                      className="input w-40"
+                      value={task.status}
+                      disabled={!canEditStatus || updateTask.isPending}
+                      onChange={(e) =>
+                        updateTask.mutate({ taskId: task.id, data: { status: e.target.value as TaskStatus } })
+                      }
+                    >
+                      {TASK_STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                    {canManage && (
+                      <button
+                        onClick={() => handleDeleteTask(task)}
+                        disabled={deleteTask.isPending}
+                        className="text-sm text-red-600 hover:text-red-800 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {expandedTaskId === task.id && <TaskDependencies taskId={task.id} canManage={canManage} />}
               </li>
             );
           })}

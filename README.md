@@ -39,12 +39,12 @@ the server, database, and Redis is shown alongside your account info.
 
 ## Project status
 
-Building in phases; see commit history for progress. Current phase: **Phase 3 —
-multi-tenant data model & core CRUD** (Projects and Tasks, every query scoped
-by organization server-side, role- and ownership-based authorization). See
-[docs/phase-3-multitenancy-crud.md](docs/phase-3-multitenancy-crud.md) for the
-design writeup, and [docs/phase-2-auth-rbac.md](docs/phase-2-auth-rbac.md) for
-Phase 2's.
+Building in phases; see commit history for progress. Current phase: **Phase 4 —
+dependency tracking & circular dependency detection** (tasks can declare
+BLOCKS/BLOCKED_BY/RELATES_TO/DUPLICATES links; a DFS-based cycle check rejects
+any BLOCKS link that would create a deadlock). See
+[docs/phase-4-dependency-graph.md](docs/phase-4-dependency-graph.md) for the
+design writeup, and the other `docs/phase-*.md` files for earlier phases.
 
 ## UI approach
 

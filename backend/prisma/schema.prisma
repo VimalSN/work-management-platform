@@ -24,9 +24,10 @@ model Organization {
   id        String   @id @default(cuid())
   name      String
   createdAt DateTime @default(now())
-  users     User[]
-  projects  Project[]
-  tasks     Task[]
+  users           User[]
+  projects        Project[]
+  tasks           Task[]
+  taskDependencies TaskDependency[]
 }
 
 model User {
@@ -83,10 +84,43 @@ model Task {
   project      Project      @relation(fields: [projectId], references: [id])
   assignee     User?        @relation(fields: [assigneeId], references: [id])
 
+  // "outgoing" = this task is the source of the edge (it blocks / duplicates
+  // / relates-to the other task). "incoming" = this task is the target (it
+  // is blocked by / is duplicated by / is related-to-by the other task).
+  outgoingDependencies TaskDependency[] @relation("DependencySource")
+  incomingDependencies TaskDependency[] @relation("DependencyTarget")
+
   @@index([organizationId])
   @@index([projectId])
   @@index([assigneeId])
   @@index([status])
+}
+
+enum DependencyType {
+  BLOCKS
+  RELATES_TO
+  DUPLICATES
+}
+
+// Only three stored types, not four: BLOCKS and BLOCKED_BY are the same fact
+// viewed from opposite ends, so the API translates BLOCKED_BY into a BLOCKS
+// edge pointing the other way rather than storing both directions separately.
+model TaskDependency {
+  id             String         @id @default(cuid())
+  type           DependencyType
+  organizationId String
+  taskId         String
+  relatedTaskId  String
+  createdAt      DateTime       @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  task         Task         @relation("DependencySource", fields: [taskId], references: [id])
+  relatedTask  Task         @relation("DependencyTarget", fields: [relatedTaskId], references: [id])
+
+  @@unique([taskId, relatedTaskId, type])
+  @@index([organizationId])
+  @@index([taskId])
+  @@index([relatedTaskId])
 }
 
 // The refresh token itself is never stored in plain form - only a hash of it,

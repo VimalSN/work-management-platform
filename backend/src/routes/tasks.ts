@@ -1,12 +1,42 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { Role, TaskStatus } from '@prisma/client';
+import { Prisma, Role, TaskStatus } from '@prisma/client';
 import { prisma } from '../prisma';
 import { AuthenticatedRequest, authenticate, authorize } from '../middleware/auth';
+import { hasCycle } from '../lib/graph';
+import type { Edge } from '../lib/graph';
 
 const router = Router();
 
 router.use(authenticate);
+
+const listTasksQuerySchema = z.object({
+  search: z.string().max(200).optional(),
+});
+
+// Used by the frontend's "link to another task" picker - dependencies can
+// cross projects, so this isn't scoped to a single project like
+// GET /projects/:id/tasks is.
+router.get('/', async (req: AuthenticatedRequest, res) => {
+  const parsedQuery = listTasksQuerySchema.safeParse(req.query);
+  if (!parsedQuery.success) {
+    res.status(400).json({ error: parsedQuery.error.flatten() });
+    return;
+  }
+
+  const tasks = await prisma.task.findMany({
+    where: {
+      organizationId: req.user!.organizationId,
+      ...(parsedQuery.data.search
+        ? { title: { contains: parsedQuery.data.search, mode: 'insensitive' as const } }
+        : {}),
+    },
+    select: { id: true, title: true, status: true, projectId: true },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+  res.json(tasks);
+});
 
 router.get('/:id', async (req: AuthenticatedRequest, res) => {
   const task = await prisma.task.findFirst({
@@ -89,5 +119,155 @@ router.delete('/:id', authorize(Role.ADMIN, Role.MANAGER), async (req: Authentic
   await prisma.task.delete({ where: { id: task.id } });
   res.status(204).send();
 });
+
+const taskSummarySelect = { id: true, title: true, status: true, projectId: true } as const;
+
+router.get('/:id/dependencies', async (req: AuthenticatedRequest, res) => {
+  const taskId = String(req.params.id);
+  const organizationId = req.user!.organizationId;
+
+  const task = await prisma.task.findFirst({ where: { id: taskId, organizationId } });
+  if (!task) {
+    res.status(404).json({ error: 'Task not found' });
+    return;
+  }
+
+  // BLOCKS/DUPLICATES are directional (stored from one specific side), so
+  // each needs two queries - one for "this task is the source" and one for
+  // "this task is the target" - to reconstruct both human-facing labels
+  // (e.g. "Blocks" vs "Blocked by") from the single stored direction.
+  // RELATES_TO is symmetric, so both directions feed the same list.
+  const [blocks, blockedBy, relatesOut, relatesIn, duplicates, duplicatedBy] = await Promise.all([
+    prisma.taskDependency.findMany({
+      where: { taskId, type: 'BLOCKS' },
+      include: { relatedTask: { select: taskSummarySelect } },
+    }),
+    prisma.taskDependency.findMany({
+      where: { relatedTaskId: taskId, type: 'BLOCKS' },
+      include: { task: { select: taskSummarySelect } },
+    }),
+    prisma.taskDependency.findMany({
+      where: { taskId, type: 'RELATES_TO' },
+      include: { relatedTask: { select: taskSummarySelect } },
+    }),
+    prisma.taskDependency.findMany({
+      where: { relatedTaskId: taskId, type: 'RELATES_TO' },
+      include: { task: { select: taskSummarySelect } },
+    }),
+    prisma.taskDependency.findMany({
+      where: { taskId, type: 'DUPLICATES' },
+      include: { relatedTask: { select: taskSummarySelect } },
+    }),
+    prisma.taskDependency.findMany({
+      where: { relatedTaskId: taskId, type: 'DUPLICATES' },
+      include: { task: { select: taskSummarySelect } },
+    }),
+  ]);
+
+  res.json({
+    blocks: blocks.map((d) => ({ dependencyId: d.id, task: d.relatedTask })),
+    blockedBy: blockedBy.map((d) => ({ dependencyId: d.id, task: d.task })),
+    relatesTo: [
+      ...relatesOut.map((d) => ({ dependencyId: d.id, task: d.relatedTask })),
+      ...relatesIn.map((d) => ({ dependencyId: d.id, task: d.task })),
+    ],
+    duplicates: duplicates.map((d) => ({ dependencyId: d.id, task: d.relatedTask })),
+    duplicatedBy: duplicatedBy.map((d) => ({ dependencyId: d.id, task: d.task })),
+  });
+});
+
+const createDependencySchema = z.object({
+  relatedTaskId: z.string().min(1),
+  type: z.enum(['BLOCKS', 'BLOCKED_BY', 'RELATES_TO', 'DUPLICATES']),
+});
+
+router.post(
+  '/:id/dependencies',
+  authorize(Role.ADMIN, Role.MANAGER),
+  async (req: AuthenticatedRequest, res) => {
+    const parsed = createDependencySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+
+    const taskId = String(req.params.id);
+    const { relatedTaskId, type } = parsed.data;
+    const organizationId = req.user!.organizationId;
+
+    if (relatedTaskId === taskId) {
+      res.status(400).json({ error: 'A task cannot depend on itself' });
+      return;
+    }
+
+    const [task, relatedTask] = await Promise.all([
+      prisma.task.findFirst({ where: { id: taskId, organizationId } }),
+      prisma.task.findFirst({ where: { id: relatedTaskId, organizationId } }),
+    ]);
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+    if (!relatedTask) {
+      res.status(400).json({ error: 'Related task not found in this organization' });
+      return;
+    }
+
+    // BLOCKS and BLOCKED_BY describe the same edge from opposite ends - only
+    // the direction differs, so both collapse to one stored type.
+    const storedType = type === 'BLOCKED_BY' ? 'BLOCKS' : type;
+    const sourceTaskId = type === 'BLOCKED_BY' ? relatedTaskId : taskId;
+    const targetTaskId = type === 'BLOCKED_BY' ? taskId : relatedTaskId;
+
+    if (storedType === 'BLOCKS') {
+      const existingBlocksEdges = await prisma.taskDependency.findMany({
+        where: { organizationId, type: 'BLOCKS' },
+        select: { taskId: true, relatedTaskId: true },
+      });
+      const candidateEdges: Edge[] = [
+        ...existingBlocksEdges.map((e) => ({ from: e.taskId, to: e.relatedTaskId })),
+        { from: sourceTaskId, to: targetTaskId },
+      ];
+      if (hasCycle(candidateEdges)) {
+        res.status(409).json({ error: 'This would create a circular dependency' });
+        return;
+      }
+    }
+
+    try {
+      const dependency = await prisma.taskDependency.create({
+        data: { organizationId, taskId: sourceTaskId, relatedTaskId: targetTaskId, type: storedType },
+      });
+      res.status(201).json(dependency);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        res.status(409).json({ error: 'This dependency already exists' });
+        return;
+      }
+      throw err;
+    }
+  },
+);
+
+router.delete(
+  '/:id/dependencies/:dependencyId',
+  authorize(Role.ADMIN, Role.MANAGER),
+  async (req: AuthenticatedRequest, res) => {
+    const taskId = String(req.params.id);
+    const dependencyId = String(req.params.dependencyId);
+    const organizationId = req.user!.organizationId;
+
+    const dependency = await prisma.taskDependency.findFirst({
+      where: { id: dependencyId, organizationId, OR: [{ taskId }, { relatedTaskId: taskId }] },
+    });
+    if (!dependency) {
+      res.status(404).json({ error: 'Dependency not found' });
+      return;
+    }
+
+    await prisma.taskDependency.delete({ where: { id: dependency.id } });
+    res.status(204).send();
+  },
+);
 
 export default router;
