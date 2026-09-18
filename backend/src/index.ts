@@ -9,7 +9,10 @@ import authRouter from './routes/auth';
 import projectsRouter from './routes/projects';
 import tasksRouter from './routes/tasks';
 import usersRouter from './routes/users';
+import notificationsRouter from './routes/notifications';
+import workloadRouter from './routes/workload';
 import { initRealtime } from './realtime';
+import { startNotificationsWorker } from './queue/notificationsWorker';
 
 const app = express();
 const httpServer = createServer(app);
@@ -30,6 +33,8 @@ app.use('/auth', authRouter);
 app.use('/projects', projectsRouter);
 app.use('/tasks', tasksRouter);
 app.use('/users', usersRouter);
+app.use('/notifications', notificationsRouter);
+app.use('/workload', workloadRouter);
 
 app.get('/health', async (_req, res) => {
   const status = { server: 'ok', database: 'unknown', redis: 'unknown' };
@@ -62,6 +67,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 initRealtime(httpServer);
+startNotificationsWorker();
 
 httpServer.listen(PORT, () => {
   console.log(`Backend listening on http://localhost:${PORT}`);

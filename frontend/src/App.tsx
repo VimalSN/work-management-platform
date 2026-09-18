@@ -6,6 +6,7 @@ import { RequireRole } from './components/RequireRole';
 import { ProjectsListPage } from './pages/ProjectsListPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { TeamPage } from './pages/TeamPage';
+import { WorkloadPage } from './pages/WorkloadPage';
 
 function App() {
   const { user, loading } = useAuth();
@@ -28,6 +29,7 @@ function App() {
         <Route index element={<Navigate to="/projects" replace />} />
         <Route path="/projects" element={<ProjectsListPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
+        <Route path="/workload" element={<WorkloadPage />} />
         <Route
           path="/team"
           element={

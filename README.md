@@ -39,13 +39,15 @@ the server, database, and Redis is shown alongside your account info.
 
 ## Project status
 
-Building in phases; see commit history for progress. Current phase: **Phase 6 —
-real-time collaboration & responsiveness** (Socket.IO with JWT-authenticated,
-org-scoped project rooms; task and comment events broadcast live; debounced
-refetches and optimistic task-status updates). Comments were added as part
-of this phase (never built in an earlier one, but assumed by this phase's
-brief). See [docs/phase-6-realtime.md](docs/phase-6-realtime.md) for the
-design writeup, and the other `docs/phase-*.md` files for earlier phases.
+Building in phases; see commit history for progress. Current phase: **Phase 7 —
+workload view & basic notifications** (a database-aggregated workload
+dashboard; task-assignment/comment notifications processed by a BullMQ
+worker off the request path, delivered live over the same sockets from
+Phase 6). This was the last phase that adds a user-facing feature - Phase 8
+(tests, Docker, CI, one-time cloud deploy) is entirely behind-the-scenes.
+See [docs/phase-7-workload-notifications.md](docs/phase-7-workload-notifications.md)
+for the design writeup, and the other `docs/phase-*.md` files for earlier
+phases.
 
 ## UI approach
 

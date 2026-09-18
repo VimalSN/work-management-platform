@@ -18,6 +18,7 @@ export type Task = {
   description: string | null;
   status: TaskStatus;
   version: number;
+  estimatedHours: number | null;
   projectId: string;
   assigneeId: string | null;
   createdAt: string;
@@ -63,4 +64,23 @@ export type Comment = {
   taskId: string;
   createdAt: string;
   author: { id: string; name: string };
+};
+
+export type WorkloadEntry = {
+  userId: string;
+  name: string;
+  role: Role;
+  assignedHours: number;
+  capacityHours: number;
+};
+
+export type NotificationType = 'TASK_ASSIGNED' | 'NEW_COMMENT';
+
+export type AppNotification = {
+  id: string;
+  type: NotificationType;
+  message: string;
+  read: boolean;
+  taskId: string | null;
+  createdAt: string;
 };

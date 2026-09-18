@@ -126,12 +126,18 @@ export function ProjectDetailPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('');
 
   const createTask = useMutation({
     mutationFn: () =>
       api.post(
         `/projects/${id}/tasks`,
-        { title, description: description || undefined, assigneeId: assigneeId || undefined },
+        {
+          title,
+          description: description || undefined,
+          assigneeId: assigneeId || undefined,
+          estimatedHours: estimatedHours ? Number(estimatedHours) : undefined,
+        },
         // A fresh key per mutate() call - but if axios internally retries this
         // exact request (e.g. after a 401 triggers a token refresh), the
         // retry reuses this same request config/header rather than getting a
@@ -142,6 +148,7 @@ export function ProjectDetailPage() {
       setTitle('');
       setDescription('');
       setAssigneeId('');
+      setEstimatedHours('');
       queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
     },
   });
@@ -175,7 +182,10 @@ export function ProjectDetailPage() {
                   <div>
                     <div className="font-medium text-slate-900">{task.title}</div>
                     {task.description && <div className="text-sm text-slate-500">{task.description}</div>}
-                    <div className="text-xs text-slate-400 mt-1">Assigned to {userName(task.assigneeId)}</div>
+                    <div className="text-xs text-slate-400 mt-1">
+                      Assigned to {userName(task.assigneeId)}
+                      {task.estimatedHours != null && ` · ${task.estimatedHours}h estimated`}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <button
@@ -248,6 +258,15 @@ export function ProjectDetailPage() {
               </option>
             ))}
           </select>
+          <input
+            className="input"
+            type="number"
+            min="0"
+            step="0.5"
+            placeholder="Estimated hours (optional)"
+            value={estimatedHours}
+            onChange={(e) => setEstimatedHours(e.target.value)}
+          />
           <button
             type="submit"
             disabled={createTask.isPending}

@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { HealthStatus } from './HealthStatus';
+import { NotificationBell } from './NotificationBell';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `px-3 py-1.5 rounded text-sm font-medium ${isActive ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`;
@@ -18,6 +19,9 @@ export function Layout() {
             <NavLink to="/projects" className={navLinkClass}>
               Projects
             </NavLink>
+            <NavLink to="/workload" className={navLinkClass}>
+              Workload
+            </NavLink>
             {(user.role === 'ADMIN' || user.role === 'MANAGER') && (
               <NavLink to="/team" className={navLinkClass}>
                 Team
@@ -26,6 +30,7 @@ export function Layout() {
           </nav>
         </div>
         <div className="flex items-center gap-4 text-sm">
+          <NotificationBell />
           <span className="text-slate-600">
             {user.name} — <span className="font-medium">{user.role}</span>
           </span>

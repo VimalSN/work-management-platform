@@ -5,6 +5,7 @@ import { prisma } from '../prisma';
 import { AuthenticatedRequest, authenticate, authorize } from '../middleware/auth';
 import { idempotent } from '../middleware/idempotency';
 import { emitToProject } from '../realtime';
+import { enqueueNotification } from '../queue/notifications';
 
 const router = Router();
 
@@ -130,6 +131,7 @@ const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(5000).optional(),
   assigneeId: z.string().optional(),
+  estimatedHours: z.number().positive().max(1000).optional(),
 });
 
 router.post(
@@ -168,11 +170,23 @@ router.post(
         title: parsed.data.title,
         description: parsed.data.description,
         assigneeId: parsed.data.assigneeId,
+        estimatedHours: parsed.data.estimatedHours,
         projectId: project.id,
         organizationId: req.user!.organizationId,
       },
     });
     emitToProject(project.id, 'task:created', task);
+
+    if (parsed.data.assigneeId && parsed.data.assigneeId !== req.user!.id) {
+      await enqueueNotification({
+        userId: parsed.data.assigneeId,
+        organizationId: req.user!.organizationId,
+        type: 'TASK_ASSIGNED',
+        message: `You were assigned to "${task.title}"`,
+        taskId: task.id,
+      });
+    }
+
     res.status(201).json(task);
   },
 );

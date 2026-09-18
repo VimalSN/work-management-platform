@@ -43,6 +43,11 @@ export function initRealtime(httpServer: HttpServer): SocketIOServer {
   io.on('connection', (socket: Socket) => {
     const user = (socket.data as { user: SocketUser }).user;
 
+    // Every socket automatically gets its own personal room - unlike
+    // project rooms, this isn't opt-in per view, because notifications are
+    // relevant no matter what page the user currently has open.
+    socket.join(`user:${user.id}`);
+
     // Room membership is authorization, not just organization - a socket can
     // only join a project's room if that project actually belongs to the
     // connected user's organization. Without this check, "rooms" would be
@@ -71,4 +76,8 @@ export function initRealtime(httpServer: HttpServer): SocketIOServer {
 // whole organization (or worse, the whole platform) regardless of relevance.
 export function emitToProject(projectId: string, event: string, payload: unknown): void {
   io?.to(`project:${projectId}`).emit(event, payload);
+}
+
+export function emitToUser(userId: string, event: string, payload: unknown): void {
+  io?.to(`user:${userId}`).emit(event, payload);
 }

@@ -6,6 +6,7 @@ import { AuthenticatedRequest, authenticate, authorize } from '../middleware/aut
 import { hasCycle } from '../lib/graph';
 import type { Edge } from '../lib/graph';
 import { emitToProject } from '../realtime';
+import { enqueueNotification } from '../queue/notifications';
 
 const router = Router();
 
@@ -55,6 +56,7 @@ const updateTaskSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   status: z.nativeEnum(TaskStatus).optional(),
   assigneeId: z.string().nullable().optional(),
+  estimatedHours: z.number().positive().max(1000).nullable().optional(),
   // Required: the version the client last read, so a stale write can be
   // rejected instead of silently overwriting someone else's change.
   version: z.number().int(),
@@ -131,6 +133,18 @@ router.patch('/:id', async (req: AuthenticatedRequest, res) => {
 
   const updated = await prisma.task.findUnique({ where: { id: task.id } });
   emitToProject(task.projectId, 'task:updated', updated);
+
+  const assigneeChanged = 'assigneeId' in data && data.assigneeId !== task.assigneeId;
+  if (assigneeChanged && data.assigneeId && data.assigneeId !== req.user!.id) {
+    await enqueueNotification({
+      userId: data.assigneeId,
+      organizationId: req.user!.organizationId,
+      type: 'TASK_ASSIGNED',
+      message: `You were assigned to "${updated!.title}"`,
+      taskId: task.id,
+    });
+  }
+
   res.json(updated);
 });
 
@@ -353,6 +367,17 @@ router.post(
     });
 
     emitToProject(task.projectId, 'comment:created', comment);
+
+    if (task.assigneeId && task.assigneeId !== req.user!.id) {
+      await enqueueNotification({
+        userId: task.assigneeId,
+        organizationId: req.user!.organizationId,
+        type: 'NEW_COMMENT',
+        message: `New comment on "${task.title}"`,
+        taskId: task.id,
+      });
+    }
+
     res.status(201).json(comment);
   },
 );
