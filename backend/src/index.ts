@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { createServer } from 'http';
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -8,8 +9,10 @@ import authRouter from './routes/auth';
 import projectsRouter from './routes/projects';
 import tasksRouter from './routes/tasks';
 import usersRouter from './routes/users';
+import { initRealtime } from './realtime';
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 4000;
 
 // credentials: true + an explicit origin (not "*") is required for the
@@ -58,6 +61,8 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
+initRealtime(httpServer);
+
+httpServer.listen(PORT, () => {
   console.log(`Backend listening on http://localhost:${PORT}`);
 });

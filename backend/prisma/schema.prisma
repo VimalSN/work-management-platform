@@ -28,6 +28,7 @@ model Organization {
   projects        Project[]
   tasks           Task[]
   taskDependencies TaskDependency[]
+  comments        Comment[]
 }
 
 model User {
@@ -44,6 +45,7 @@ model User {
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   assignedTasks       Task[]
+  comments            Comment[]
 
   @@index([organizationId])
 }
@@ -93,11 +95,28 @@ model Task {
   // is blocked by / is duplicated by / is related-to-by the other task).
   outgoingDependencies TaskDependency[] @relation("DependencySource")
   incomingDependencies TaskDependency[] @relation("DependencyTarget")
+  comments             Comment[]
 
   @@index([organizationId])
   @@index([projectId])
   @@index([assigneeId])
   @@index([status])
+}
+
+model Comment {
+  id             String   @id @default(cuid())
+  body           String
+  taskId         String
+  authorId       String
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  task         Task         @relation(fields: [taskId], references: [id])
+  author       User         @relation(fields: [authorId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([taskId])
+  @@index([organizationId])
 }
 
 enum DependencyType {

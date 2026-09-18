@@ -13,6 +13,10 @@ export function setAccessToken(token: string | null) {
   accessToken = token;
 }
 
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
 export const api = axios.create({
   baseURL: API_URL,
   withCredentials: true, // send/receive the httpOnly refresh-token cookie

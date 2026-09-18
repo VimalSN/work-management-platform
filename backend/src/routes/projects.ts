@@ -4,6 +4,7 @@ import { Role, TaskStatus } from '@prisma/client';
 import { prisma } from '../prisma';
 import { AuthenticatedRequest, authenticate, authorize } from '../middleware/auth';
 import { idempotent } from '../middleware/idempotency';
+import { emitToProject } from '../realtime';
 
 const router = Router();
 
@@ -171,6 +172,7 @@ router.post(
         organizationId: req.user!.organizationId,
       },
     });
+    emitToProject(project.id, 'task:created', task);
     res.status(201).json(task);
   },
 );

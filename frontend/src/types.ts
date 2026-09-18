@@ -56,3 +56,11 @@ export type TaskDependencies = {
   duplicates: DependencyItem[];
   duplicatedBy: DependencyItem[];
 };
+
+export type Comment = {
+  id: string;
+  body: string;
+  taskId: string;
+  createdAt: string;
+  author: { id: string; name: string };
+};

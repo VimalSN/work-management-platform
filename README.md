@@ -39,13 +39,13 @@ the server, database, and Redis is shown alongside your account info.
 
 ## Project status
 
-Building in phases; see commit history for progress. Current phase: **Phase 5 —
-optimistic concurrency control** (a `version` column on tasks with an atomic
-conditional update rejects stale writes with 409; Redis-backed idempotency
-keys prevent a network retry from creating a duplicate task/project). See
-[docs/phase-5-optimistic-concurrency.md](docs/phase-5-optimistic-concurrency.md)
-for the design writeup, and the other `docs/phase-*.md` files for earlier
-phases.
+Building in phases; see commit history for progress. Current phase: **Phase 6 —
+real-time collaboration & responsiveness** (Socket.IO with JWT-authenticated,
+org-scoped project rooms; task and comment events broadcast live; debounced
+refetches and optimistic task-status updates). Comments were added as part
+of this phase (never built in an earlier one, but assumed by this phase's
+brief). See [docs/phase-6-realtime.md](docs/phase-6-realtime.md) for the
+design writeup, and the other `docs/phase-*.md` files for earlier phases.
 
 ## UI approach
 

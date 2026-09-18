@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
+import { useSocket } from '../socket/SocketContext';
+import { debounce } from '../lib/debounce';
 import { TaskDependencies } from '../components/TaskDependencies';
+import { TaskComments } from '../components/TaskComments';
 import { TASK_STATUSES } from '../types';
 import type { OrgUser, Project, Task, TaskStatus } from '../types';
 
@@ -12,7 +15,9 @@ export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const canManage = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+  const canComment = user?.role !== 'VIEWER';
   const queryClient = useQueryClient();
+  const socket = useSocket();
 
   const { data: project } = useQuery({
     queryKey: ['projects', id],
@@ -23,6 +28,41 @@ export function ProjectDetailPage() {
     queryKey: ['projects', id, 'tasks'],
     queryFn: async () => (await api.get<Task[]>(`/projects/${id}/tasks`)).data,
   });
+
+  useEffect(() => {
+    if (!socket || !id) return;
+
+    function join() {
+      socket!.emit('join-project', id);
+    }
+
+    // 'connect' fires on the FIRST connection and again on every reconnect
+    // (e.g. after a dropped WiFi connection comes back). Room membership
+    // isn't remembered across a disconnect - a reconnect is a new
+    // connection as far as the server is concerned, so it has to be
+    // rejoined explicitly every time, not just once on mount.
+    join();
+    socket.on('connect', join);
+
+    // Debounced: several task events landing within the same burst (e.g.
+    // someone bulk-updating a handful of tasks) collapse into one refetch
+    // once the burst settles, not one refetch per event.
+    const refetchTasks = debounce(() => {
+      queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
+    }, 300);
+
+    socket.on('task:created', refetchTasks);
+    socket.on('task:updated', refetchTasks);
+    socket.on('task:deleted', refetchTasks);
+
+    return () => {
+      socket.emit('leave-project', id);
+      socket.off('connect', join);
+      socket.off('task:created', refetchTasks);
+      socket.off('task:updated', refetchTasks);
+      socket.off('task:deleted', refetchTasks);
+    };
+  }, [socket, id, queryClient]);
 
   const { data: orgUsers } = useQuery({
     queryKey: ['users'],
@@ -39,11 +79,27 @@ export function ProjectDetailPage() {
   const updateTask = useMutation({
     mutationFn: (vars: { taskId: string; data: Partial<Pick<Task, 'status' | 'assigneeId'>> & { version: number } }) =>
       api.patch(`/tasks/${vars.taskId}`, vars.data),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: ['projects', id, 'tasks'] });
+      const previousTasks = queryClient.getQueryData<Task[]>(['projects', id, 'tasks']);
+      // Optimistic UI: apply the change to the local cache immediately,
+      // before the server has confirmed anything, so the dropdown reflects
+      // the click right away instead of visibly lagging behind it. If the
+      // request fails, onError below restores previousTasks - the guess
+      // was wrong, so showing it any longer would be a lie.
+      queryClient.setQueryData<Task[]>(['projects', id, 'tasks'], (old) =>
+        old?.map((t) => (t.id === vars.taskId ? { ...t, ...vars.data } : t)),
+      );
+      return { previousTasks };
+    },
     onSuccess: () => {
       setConflictMessage(null);
       queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
     },
-    onError: (err: any) => {
+    onError: (err: any, _vars, context) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(['projects', id, 'tasks'], context.previousTasks);
+      }
       if (err.response?.status === 409) {
         // Someone else changed this task since we last fetched it. Refetch
         // so the dropdown reflects the real current status rather than the
@@ -126,7 +182,7 @@ export function ProjectDetailPage() {
                       onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
                       className="text-sm text-slate-500 hover:text-slate-800"
                     >
-                      {expandedTaskId === task.id ? 'Hide' : 'Dependencies'}
+                      {expandedTaskId === task.id ? 'Hide' : 'Details'}
                     </button>
                     <select
                       className="input w-40"
@@ -156,7 +212,12 @@ export function ProjectDetailPage() {
                     )}
                   </div>
                 </div>
-                {expandedTaskId === task.id && <TaskDependencies taskId={task.id} canManage={canManage} />}
+                {expandedTaskId === task.id && (
+                  <>
+                    <TaskDependencies taskId={task.id} canManage={canManage} />
+                    <TaskComments taskId={task.id} canComment={canComment} />
+                  </>
+                )}
               </li>
             );
           })}

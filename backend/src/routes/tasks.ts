@@ -5,6 +5,7 @@ import { prisma } from '../prisma';
 import { AuthenticatedRequest, authenticate, authorize } from '../middleware/auth';
 import { hasCycle } from '../lib/graph';
 import type { Edge } from '../lib/graph';
+import { emitToProject } from '../realtime';
 
 const router = Router();
 
@@ -129,6 +130,7 @@ router.patch('/:id', async (req: AuthenticatedRequest, res) => {
   }
 
   const updated = await prisma.task.findUnique({ where: { id: task.id } });
+  emitToProject(task.projectId, 'task:updated', updated);
   res.json(updated);
 });
 
@@ -142,6 +144,7 @@ router.delete('/:id', authorize(Role.ADMIN, Role.MANAGER), async (req: Authentic
   }
 
   await prisma.task.delete({ where: { id: task.id } });
+  emitToProject(task.projectId, 'task:deleted', { id: task.id });
   res.status(204).send();
 });
 
@@ -292,6 +295,65 @@ router.delete(
 
     await prisma.taskDependency.delete({ where: { id: dependency.id } });
     res.status(204).send();
+  },
+);
+
+router.get('/:id/comments', async (req: AuthenticatedRequest, res) => {
+  const taskId = String(req.params.id);
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, organizationId: req.user!.organizationId },
+  });
+  if (!task) {
+    res.status(404).json({ error: 'Task not found' });
+    return;
+  }
+
+  const comments = await prisma.comment.findMany({
+    where: { taskId },
+    include: { author: { select: { id: true, name: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+  res.json(comments);
+});
+
+const createCommentSchema = z.object({
+  body: z.string().min(1).max(2000),
+});
+
+// Viewer is deliberately excluded - "read-only access to project progress"
+// (from the brief's role descriptions) means exactly that; posting a comment
+// is a write, even though it isn't a project/task management action.
+router.post(
+  '/:id/comments',
+  authorize(Role.ADMIN, Role.MANAGER, Role.DEVELOPER),
+  async (req: AuthenticatedRequest, res) => {
+    const parsed = createCommentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.flatten() });
+      return;
+    }
+
+    const taskId = String(req.params.id);
+    const task = await prisma.task.findFirst({
+      where: { id: taskId, organizationId: req.user!.organizationId },
+    });
+    if (!task) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+
+    const comment = await prisma.comment.create({
+      data: {
+        body: parsed.data.body,
+        taskId,
+        authorId: req.user!.id,
+        organizationId: req.user!.organizationId,
+      },
+      include: { author: { select: { id: true, name: true } } },
+    });
+
+    emitToProject(task.projectId, 'comment:created', comment);
+    res.status(201).json(comment);
   },
 );
 
