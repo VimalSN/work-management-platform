@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DndContext, DragOverlay } from '@dnd-kit/core';
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { Plus } from 'lucide-react';
 import { api } from '../lib/api';
@@ -34,6 +34,13 @@ export function ProjectDetailPage() {
   const queryClient = useQueryClient();
   const socket = useSocket();
   const { showToast } = useToast();
+
+  // Without a minimum drag distance, the pointer sensor treats every
+  // pointer-down as a potential drag and intercepts it before a plain click
+  // (zero movement) can register - so clicking a card to open it would
+  // never fire onClick. Requiring 8px of movement before a drag "activates"
+  // lets a real click pass through untouched while still recognizing drags.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   const { data: project } = useQuery({
     queryKey: ['projects', id],
@@ -242,7 +249,7 @@ export function ProjectDetailPage() {
       {tasksLoading && <p className="text-slate-500">Loading tasks…</p>}
 
       {tasks && (
-        <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-4 overflow-x-auto pb-2">
             {TASK_STATUSES.map((status) => {
               const columnTasks = tasks.filter((t) => t.status === status);
