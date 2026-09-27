@@ -24,6 +24,10 @@ export type Task = {
   id: string;
   title: string;
   description: string | null;
+  acceptanceCriteria: string | null;
+  stepsToReproduce: string | null;
+  expectedResult: string | null;
+  actualResult: string | null;
   status: TaskStatus;
   priority: Priority;
   issueType: IssueType;
@@ -33,6 +37,7 @@ export type Task = {
   estimatedHours: number | null;
   projectId: string;
   assigneeId: string | null;
+  reporterId: string | null;
   createdAt: string;
   updatedAt: string;
 };

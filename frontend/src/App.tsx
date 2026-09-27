@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { RequireRole } from './components/RequireRole';
 import { ProjectsListPage } from './pages/ProjectsListPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
+import { TaskDetailPage } from './pages/TaskDetailPage';
 import { TeamPage } from './pages/TeamPage';
 import { WorkloadPage } from './pages/WorkloadPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -31,6 +32,7 @@ function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/projects" element={<ProjectsListPage />} />
         <Route path="/projects/:id" element={<ProjectDetailPage />} />
+        <Route path="/tasks/:id" element={<TaskDetailPage />} />
         <Route path="/workload" element={<WorkloadPage />} />
         <Route
           path="/team"

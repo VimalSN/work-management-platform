@@ -58,13 +58,40 @@ export function TaskComments({ taskId, canComment }: { taskId: string; canCommen
     if (body.trim()) addComment.mutate();
   }
 
+  function initials(name: string) {
+    return name
+      .split(' ')
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  }
+
+  function formatTimestamp(iso: string) {
+    return new Date(iso).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
   return (
-    <div className="space-y-2 text-sm">
-      <div className="space-y-1">
+    <div className="space-y-3 text-sm">
+      <div className="space-y-3">
         {comments?.length === 0 && <p className="text-slate-400">No comments yet.</p>}
         {comments?.map((c) => (
-          <div key={c.id} className="text-slate-700">
-            <span className="font-medium">{c.author.name}:</span> {c.body}
+          <div key={c.id} className="flex items-start gap-2">
+            <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-xs font-medium flex items-center justify-center flex-shrink-0">
+              {initials(c.author.name)}
+            </div>
+            <div className="flex-1 min-w-0 bg-slate-50 rounded-md px-3 py-2">
+              <div className="flex items-baseline gap-2">
+                <span className="font-medium text-slate-800">{c.author.name}</span>
+                <span className="text-xs text-slate-400">{formatTimestamp(c.createdAt)}</span>
+              </div>
+              <p className="text-slate-700 whitespace-pre-wrap">{c.body}</p>
+            </div>
           </div>
         ))}
       </div>

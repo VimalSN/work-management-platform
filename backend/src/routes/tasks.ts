@@ -63,6 +63,10 @@ router.get('/:id', async (req: AuthenticatedRequest, res) => {
 const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(5000).nullable().optional(),
+  acceptanceCriteria: z.string().max(5000).nullable().optional(),
+  stepsToReproduce: z.string().max(5000).nullable().optional(),
+  expectedResult: z.string().max(5000).nullable().optional(),
+  actualResult: z.string().max(5000).nullable().optional(),
   status: z.nativeEnum(TaskStatus).optional(),
   priority: z.nativeEnum(Priority).optional(),
   issueType: z.nativeEnum(IssueType).optional(),

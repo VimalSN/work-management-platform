@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { useSocket } from '../socket/SocketContext';
@@ -11,7 +11,6 @@ import { useToast } from '../components/ui/ToastContext';
 import { debounce } from '../lib/debounce';
 import { TaskCard } from '../components/TaskCard';
 import { TaskColumn } from '../components/TaskColumn';
-import { TaskDetailModal } from '../components/TaskDetailModal';
 import { CreateTaskModal } from '../components/CreateTaskModal';
 import { Button } from '../components/ui/Button';
 import { TASK_STATUSES } from '../types';
@@ -26,9 +25,9 @@ const COLUMN_LABELS: Record<TaskStatus, string> = {
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const canManage = user?.role === 'ADMIN' || user?.role === 'MANAGER';
-  const canComment = user?.role !== 'VIEWER';
   const queryClient = useQueryClient();
   const socket = useSocket();
   const { showToast } = useToast();
@@ -95,21 +94,16 @@ export function ProjectDetailPage() {
     return orgUsers?.find((u) => u.id === userId)?.name || 'Unknown';
   }
 
-  const updateTask = useMutation({
-    mutationFn: (vars: {
-      taskId: string;
-      data: Partial<Pick<Task, 'status' | 'assigneeId' | 'priority' | 'issueType' | 'dueDate' | 'labels'>> & {
-        version: number;
-      };
-    }) => api.patch(`/tasks/${vars.taskId}`, vars.data),
+  // Only status changes ever happen from the board itself (via drag and
+  // drop) - every other field is edited on the task's own detail page now.
+  const updateTaskStatus = useMutation({
+    mutationFn: (vars: { taskId: string; status: TaskStatus; version: number }) =>
+      api.patch(`/tasks/${vars.taskId}`, { status: vars.status, version: vars.version }),
     onMutate: async (vars) => {
       await queryClient.cancelQueries({ queryKey: ['projects', id, 'tasks'] });
       const previousTasks = queryClient.getQueryData<Task[]>(['projects', id, 'tasks']);
-      // Optimistic UI: apply the change to the local cache immediately,
-      // before the server has confirmed anything. If the request fails,
-      // onError below restores previousTasks.
       queryClient.setQueryData<Task[]>(['projects', id, 'tasks'], (old) =>
-        old?.map((t) => (t.id === vars.taskId ? { ...t, ...vars.data } : t)),
+        old?.map((t) => (t.id === vars.taskId ? { ...t, status: vars.status } : t)),
       );
       return { previousTasks };
     },
@@ -121,8 +115,6 @@ export function ProjectDetailPage() {
         queryClient.setQueryData(['projects', id, 'tasks'], context.previousTasks);
       }
       if (err.response?.status === 409) {
-        // Someone else changed this task since we last fetched it. Refetch
-        // so the board reflects the real current state.
         showToast('error', 'This task was changed by someone else - showing the latest version.');
         queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
       } else {
@@ -130,19 +122,6 @@ export function ProjectDetailPage() {
       }
     },
   });
-
-  const deleteTask = useMutation({
-    mutationFn: (taskId: string) => api.delete(`/tasks/${taskId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
-      showToast('success', 'Task deleted');
-      setSelectedTaskId(null);
-    },
-    onError: () => showToast('error', 'Could not delete task'),
-  });
-
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const selectedTask = tasks?.find((t) => t.id === selectedTaskId) ?? null;
 
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const activeDragTask = tasks?.find((t) => t.id === activeDragId) ?? null;
@@ -157,13 +136,24 @@ export function ProjectDetailPage() {
     const newStatus = event.over?.id as TaskStatus | undefined;
     const task = tasks?.find((t) => t.id === taskId);
     if (!task || !newStatus || task.status === newStatus) return;
-    updateTask.mutate({ taskId, data: { status: newStatus, version: task.version } });
+    updateTaskStatus.mutate({ taskId, status: newStatus, version: task.version });
   }
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const visibleTasks = useMemo(() => {
+    if (!tasks) return tasks;
+    const query = search.trim().toLowerCase();
+    if (!query) return tasks;
+    return tasks.filter((t) => {
+      const assignee = orgUsers?.find((u) => u.id === t.assigneeId)?.name ?? 'Unassigned';
+      return t.title.toLowerCase().includes(query) || assignee.toLowerCase().includes(query);
+    });
+  }, [tasks, search, orgUsers]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <Link to="/projects" className="text-sm text-slate-500 hover:text-slate-800">
@@ -180,20 +170,28 @@ export function ProjectDetailPage() {
       </div>
 
       {showCreateModal && (
-        <CreateTaskModal
-          projectId={id!}
-          orgUsers={orgUsers ?? []}
-          onClose={() => setShowCreateModal(false)}
-        />
+        <CreateTaskModal projectId={id!} orgUsers={orgUsers ?? []} onClose={() => setShowCreateModal(false)} />
+      )}
+
+      {tasks && tasks.length > 0 && (
+        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-md px-3 py-2 max-w-sm">
+          <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <input
+            className="flex-1 text-sm outline-none placeholder:text-slate-400"
+            placeholder="Search this board…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       )}
 
       {tasksLoading && <p className="text-slate-500">Loading tasks…</p>}
 
-      {tasks && (
+      {visibleTasks && (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex gap-4 overflow-x-auto pb-2">
             {TASK_STATUSES.map((status) => {
-              const columnTasks = tasks.filter((t) => t.status === status);
+              const columnTasks = visibleTasks.filter((t) => t.status === status);
               return (
                 <TaskColumn key={status} status={status} label={COLUMN_LABELS[status]} count={columnTasks.length}>
                   {columnTasks.map((task) => (
@@ -202,7 +200,7 @@ export function ProjectDetailPage() {
                       task={task}
                       assigneeName={userName(task.assigneeId)}
                       draggable={canManage || user?.id === task.assigneeId}
-                      onOpen={() => setSelectedTaskId(task.id)}
+                      onOpen={() => navigate(`/tasks/${task.id}`)}
                     />
                   ))}
                 </TaskColumn>
@@ -220,21 +218,6 @@ export function ProjectDetailPage() {
             )}
           </DragOverlay>
         </DndContext>
-      )}
-
-      {selectedTask && (
-        <TaskDetailModal
-          task={selectedTask}
-          orgUsers={orgUsers ?? []}
-          canManage={canManage}
-          canEditStatus={canManage || user?.id === selectedTask.assigneeId}
-          canComment={canComment}
-          onClose={() => setSelectedTaskId(null)}
-          onUpdate={(data) => updateTask.mutate({ taskId: selectedTask.id, data: { ...data, version: selectedTask.version } })}
-          onDelete={() => deleteTask.mutate(selectedTask.id)}
-          isUpdating={updateTask.isPending}
-          isDeleting={deleteTask.isPending}
-        />
       )}
     </div>
   );

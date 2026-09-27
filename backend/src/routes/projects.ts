@@ -130,6 +130,10 @@ router.get('/:id/tasks', async (req: AuthenticatedRequest, res) => {
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(5000).optional(),
+  acceptanceCriteria: z.string().max(5000).optional(),
+  stepsToReproduce: z.string().max(5000).optional(),
+  expectedResult: z.string().max(5000).optional(),
+  actualResult: z.string().max(5000).optional(),
   assigneeId: z.string().optional(),
   estimatedHours: z.number().positive().max(1000).optional(),
   priority: z.nativeEnum(Priority).optional(),
@@ -173,6 +177,10 @@ router.post(
       data: {
         title: parsed.data.title,
         description: parsed.data.description,
+        acceptanceCriteria: parsed.data.acceptanceCriteria,
+        stepsToReproduce: parsed.data.stepsToReproduce,
+        expectedResult: parsed.data.expectedResult,
+        actualResult: parsed.data.actualResult,
         assigneeId: parsed.data.assigneeId,
         estimatedHours: parsed.data.estimatedHours,
         priority: parsed.data.priority,
@@ -181,6 +189,10 @@ router.post(
         labels: parsed.data.labels,
         projectId: project.id,
         organizationId: req.user!.organizationId,
+        // Always the authenticated caller, never taken from the request body
+        // - a client can't claim to have reported a task on someone else's
+        // behalf.
+        reporterId: req.user!.id,
       },
     });
     emitToProject(project.id, 'task:created', task);

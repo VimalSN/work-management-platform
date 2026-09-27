@@ -50,6 +50,7 @@ model User {
   refreshTokens       RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   assignedTasks       Task[]
+  reportedTasks       Task[]              @relation("TaskReporter")
   comments            Comment[]
   notifications       Notification[]
   uploadedAttachments Attachment[]
@@ -96,6 +97,17 @@ model Task {
   id             String     @id @default(cuid())
   title          String
   description    String?
+  // What "done" means for this task - shown on every task regardless of
+  // type. Free text rather than a checklist: no requirement yet that each
+  // criterion be individually checked off.
+  acceptanceCriteria String?
+  // Bug-only fields (hidden in the UI unless issueType is BUG). Kept as
+  // plain nullable columns rather than a separate BugDetails table - a
+  // second table would only earn its keep if bugs needed their own
+  // relations or independent lifecycle, and they don't.
+  stepsToReproduce   String?
+  expectedResult     String?
+  actualResult       String?
   status         TaskStatus @default(TODO)
   priority       Priority   @default(MEDIUM)
   issueType      IssueType  @default(TASK)
@@ -118,12 +130,18 @@ model Task {
   organizationId String
   projectId      String
   assigneeId     String?
+  // Who originally created the task - set once, at creation, from the
+  // authenticated caller, and never taken from client input (a Manager
+  // can't create a task "as" someone else). Nullable only because tasks
+  // created before this field existed have none.
+  reporterId     String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
   project      Project      @relation(fields: [projectId], references: [id])
   assignee     User?        @relation(fields: [assigneeId], references: [id])
+  reporter     User?        @relation("TaskReporter", fields: [reporterId], references: [id])
 
   // "outgoing" = this task is the source of the edge (it blocks / duplicates
   // / relates-to the other task). "incoming" = this task is the target (it

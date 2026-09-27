@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { api } from '../lib/api';
@@ -75,7 +76,9 @@ export function TaskDependencies({ taskId, canManage }: { taskId: string; canMan
                 key={item.dependencyId}
                 className="inline-flex items-center gap-1 bg-slate-100 rounded px-2 py-0.5 mr-1"
               >
-                {item.task.title}
+                <Link to={`/tasks/${item.task.id}`} className="hover:text-brand-700 hover:underline">
+                  {item.task.title}
+                </Link>
                 {canManage && (
                   <button
                     onClick={() => removeDependency.mutate(item.dependencyId)}

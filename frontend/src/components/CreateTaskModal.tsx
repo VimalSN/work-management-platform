@@ -32,6 +32,10 @@ export function CreateTaskModal({
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
+  const [stepsToReproduce, setStepsToReproduce] = useState('');
+  const [expectedResult, setExpectedResult] = useState('');
+  const [actualResult, setActualResult] = useState('');
   const [issueType, setIssueType] = useState<IssueType>('TASK');
   const [priority, setPriority] = useState<Priority>('MEDIUM');
   const [assigneeId, setAssigneeId] = useState('');
@@ -59,6 +63,10 @@ export function CreateTaskModal({
         {
           title,
           description: description || undefined,
+          acceptanceCriteria: acceptanceCriteria || undefined,
+          stepsToReproduce: issueType === 'BUG' ? stepsToReproduce || undefined : undefined,
+          expectedResult: issueType === 'BUG' ? expectedResult || undefined : undefined,
+          actualResult: issueType === 'BUG' ? actualResult || undefined : undefined,
           assigneeId: assigneeId || undefined,
           estimatedHours: estimatedHours ? Number(estimatedHours) : undefined,
           priority,
@@ -111,6 +119,48 @@ export function CreateTaskModal({
             placeholder="What needs to be done?"
           />
         </label>
+
+        <label className="block text-sm">
+          <span className="text-slate-500 text-xs">Acceptance criteria (optional)</span>
+          <textarea
+            className="input min-h-16 resize-y"
+            value={acceptanceCriteria}
+            onChange={(e) => setAcceptanceCriteria(e.target.value)}
+            placeholder="What does &quot;done&quot; look like for this task?"
+          />
+        </label>
+
+        {issueType === 'BUG' && (
+          <>
+            <label className="block text-sm">
+              <span className="text-slate-500 text-xs">Steps to reproduce (optional)</span>
+              <textarea
+                className="input min-h-16 resize-y"
+                value={stepsToReproduce}
+                onChange={(e) => setStepsToReproduce(e.target.value)}
+                placeholder={'1. …\n2. …\n3. …'}
+              />
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block text-sm">
+                <span className="text-slate-500 text-xs">Expected result (optional)</span>
+                <textarea
+                  className="input min-h-14 resize-y"
+                  value={expectedResult}
+                  onChange={(e) => setExpectedResult(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-slate-500 text-xs">Actual result (optional)</span>
+                <textarea
+                  className="input min-h-14 resize-y"
+                  value={actualResult}
+                  onChange={(e) => setActualResult(e.target.value)}
+                />
+              </label>
+            </div>
+          </>
+        )}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <label className="block text-sm">
