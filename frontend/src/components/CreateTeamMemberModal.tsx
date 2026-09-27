@@ -4,11 +4,20 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useToast } from './ui/ToastContext';
 import { Button } from './ui/Button';
-import { Input, Select } from './ui/Input';
+import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
+import { Badge } from './ui/Badge';
+import { InlineSelect } from './ui/InlineSelect';
+import type { InlineSelectOption } from './ui/InlineSelect';
+import { ROLE_BADGE_COLOR } from '../lib/badgeColors';
 import type { Role } from '../auth/AuthContext';
 
 const ROLES: Role[] = ['ADMIN', 'MANAGER', 'DEVELOPER', 'VIEWER'];
+const ROLE_OPTIONS: InlineSelectOption[] = ROLES.map((r) => ({
+  value: r,
+  label: r,
+  render: <Badge color={ROLE_BADGE_COLOR[r]}>{r}</Badge>,
+}));
 
 // Admin-only widget: proves the authorize() middleware actually works, not
 // just that it exists. A non-admin never sees this - the backend would
@@ -59,13 +68,7 @@ export function CreateTeamMemberModal({ onClose }: { onClose: () => void }) {
         </label>
         <label className="block text-sm">
           <span className="text-slate-500 text-xs">Role</span>
-          <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </Select>
+          <InlineSelect variant="bordered" value={role} options={ROLE_OPTIONS} onChange={(v) => setRole(v as Role)} />
         </label>
 
         <div className="flex justify-end gap-2 pt-2">

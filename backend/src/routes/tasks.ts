@@ -73,6 +73,7 @@ const updateTaskSchema = z.object({
   dueDate: z.coerce.date().nullable().optional(),
   labels: z.array(z.string().min(1).max(40)).max(10).optional(),
   assigneeId: z.string().nullable().optional(),
+  reporterId: z.string().nullable().optional(),
   estimatedHours: z.number().positive().max(1000).nullable().optional(),
   // Required: the version the client last read, so a stale write can be
   // rejected instead of silently overwriting someone else's change.
@@ -116,6 +117,7 @@ router.patch('/:id', async (req: AuthenticatedRequest, res) => {
     delete data.title;
     delete data.assigneeId;
     delete data.issueType;
+    delete data.reporterId;
   }
 
   if (data.assigneeId) {
@@ -124,6 +126,16 @@ router.patch('/:id', async (req: AuthenticatedRequest, res) => {
     });
     if (!assignee) {
       res.status(400).json({ error: 'Assignee not found in this organization' });
+      return;
+    }
+  }
+
+  if (data.reporterId) {
+    const reporter = await prisma.user.findFirst({
+      where: { id: data.reporterId, organizationId: req.user!.organizationId },
+    });
+    if (!reporter) {
+      res.status(400).json({ error: 'Reporter not found in this organization' });
       return;
     }
   }

@@ -63,7 +63,13 @@ export type OrgUser = {
 // opposite ends - the backend stores only one direction (see docs/phase-4).
 export type DependencyLinkType = 'BLOCKS' | 'BLOCKED_BY' | 'RELATES_TO' | 'DUPLICATES';
 
-export const DEPENDENCY_LINK_TYPES: DependencyLinkType[] = ['BLOCKS', 'BLOCKED_BY', 'RELATES_TO', 'DUPLICATES'];
+// Only 3 of the 4 are offered when CREATING a link - BLOCKED_BY is the same
+// edge as BLOCKS, just described from the other task's side, so picking it
+// here would just be a confusing way to do the same thing you could do by
+// adding a BLOCKS link from the other task instead. It still shows up as a
+// read-only "Blocked by" section (see TaskDependencies.tsx's SECTIONS) once
+// some other task links to this one with BLOCKS.
+export const CREATABLE_DEPENDENCY_LINK_TYPES: DependencyLinkType[] = ['BLOCKS', 'RELATES_TO', 'DUPLICATES'];
 
 export type TaskSummary = {
   id: string;

@@ -6,8 +6,9 @@ import { X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from './ui/ToastContext';
 import { Button } from './ui/Button';
-import { Input, Select } from './ui/Input';
-import { DEPENDENCY_LINK_TYPES } from '../types';
+import { InlineSelect } from './ui/InlineSelect';
+import type { InlineSelectOption } from './ui/InlineSelect';
+import { CREATABLE_DEPENDENCY_LINK_TYPES } from '../types';
 import type { DependencyItem, DependencyLinkType, TaskDependencies as TaskDependenciesData, TaskSummary } from '../types';
 
 const SECTIONS: { label: string; key: keyof TaskDependenciesData }[] = [
@@ -17,6 +18,18 @@ const SECTIONS: { label: string; key: keyof TaskDependenciesData }[] = [
   { label: 'Duplicates', key: 'duplicates' },
   { label: 'Duplicated by', key: 'duplicatedBy' },
 ];
+
+const LINK_TYPE_LABEL: Record<DependencyLinkType, string> = {
+  BLOCKS: 'Blocks',
+  BLOCKED_BY: 'Blocked by',
+  RELATES_TO: 'Relates to',
+  DUPLICATES: 'Duplicates',
+};
+
+const LINK_TYPE_OPTIONS: InlineSelectOption[] = CREATABLE_DEPENDENCY_LINK_TYPES.map((t) => ({
+  value: t,
+  label: LINK_TYPE_LABEL[t],
+}));
 
 export function TaskDependencies({ taskId, canManage }: { taskId: string; canManage: boolean }) {
   const queryClient = useQueryClient();
@@ -29,13 +42,18 @@ export function TaskDependencies({ taskId, canManage }: { taskId: string; canMan
 
   const [search, setSearch] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState('');
+  const [selectedTaskTitle, setSelectedTaskTitle] = useState('');
   const [type, setType] = useState<DependencyLinkType>('BLOCKS');
 
-  const { data: searchResults } = useQuery({
+  const { data: searchResults, isFetching: isSearching } = useQuery({
     queryKey: ['tasks', 'search', search],
     queryFn: async () => (await api.get<TaskSummary[]>('/tasks', { params: { search } })).data,
     enabled: search.trim().length > 1,
   });
+
+  const taskOptions: InlineSelectOption[] = (searchResults ?? [])
+    .filter((t) => t.id !== taskId)
+    .map((t) => ({ value: t.id, label: t.title }));
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['tasks', taskId, 'dependencies'] });
 
@@ -44,6 +62,7 @@ export function TaskDependencies({ taskId, canManage }: { taskId: string; canMan
     onSuccess: () => {
       setSearch('');
       setSelectedTaskId('');
+      setSelectedTaskTitle('');
       invalidate();
     },
     onError: (err: any) => {
@@ -98,34 +117,30 @@ export function TaskDependencies({ taskId, canManage }: { taskId: string; canMan
 
       {canManage && (
         <form onSubmit={handleAdd} className="flex items-center gap-2 flex-wrap pt-1">
-          <Input
-            className="w-48"
-            placeholder="Search tasks to link…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setSelectedTaskId('');
-            }}
-          />
-          {search.trim().length > 1 && (
-            <Select className="w-48" value={selectedTaskId} onChange={(e) => setSelectedTaskId(e.target.value)}>
-              <option value="">Select a task…</option>
-              {searchResults
-                ?.filter((t) => t.id !== taskId)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.title}
-                  </option>
-                ))}
-            </Select>
-          )}
-          <Select className="w-36" value={type} onChange={(e) => setType(e.target.value as DependencyLinkType)}>
-            {DEPENDENCY_LINK_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </Select>
+          <div className="w-48">
+            <InlineSelect
+              variant="bordered"
+              value={selectedTaskId}
+              options={taskOptions}
+              placeholder="Search tasks to link…"
+              search={search}
+              loading={isSearching}
+              onSearchChange={setSearch}
+              selectedLabel={selectedTaskId ? selectedTaskTitle : undefined}
+              onChange={(value) => {
+                setSelectedTaskId(value);
+                setSelectedTaskTitle(taskOptions.find((o) => o.value === value)?.label ?? '');
+              }}
+            />
+          </div>
+          <div className="w-36">
+            <InlineSelect
+              variant="bordered"
+              value={type}
+              options={LINK_TYPE_OPTIONS}
+              onChange={(v) => setType(v as DependencyLinkType)}
+            />
+          </div>
           <Button type="submit" disabled={!selectedTaskId} loading={addDependency.isPending}>
             Link
           </Button>

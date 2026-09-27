@@ -8,7 +8,9 @@ import { useSocket } from '../socket/SocketContext';
 import { useToast } from '../components/ui/ToastContext';
 import { useConfirm } from '../components/ui/ConfirmContext';
 import { Badge } from '../components/ui/Badge';
-import { Select } from '../components/ui/Input';
+import { Avatar } from '../components/ui/Avatar';
+import { InlineSelect } from '../components/ui/InlineSelect';
+import type { InlineSelectOption } from '../components/ui/InlineSelect';
 import { LabelsInput } from '../components/ui/LabelsInput';
 import { RowMenu } from '../components/ui/RowMenu';
 import { TaskAttachments } from '../components/TaskAttachments';
@@ -24,6 +26,7 @@ type TaskUpdate = Partial<
     Task,
     | 'status'
     | 'assigneeId'
+    | 'reporterId'
     | 'priority'
     | 'issueType'
     | 'dueDate'
@@ -242,6 +245,40 @@ export function TaskDetailPage() {
   const IssueIcon = ISSUE_TYPE_ICON[task.issueType];
   const isOverdue = task.dueDate != null && new Date(task.dueDate) < new Date() && task.status !== 'DONE';
 
+  const statusOptions: InlineSelectOption[] = TASK_STATUSES.map((s) => ({
+    value: s,
+    label: s,
+    render: <Badge color={STATUS_BADGE_COLOR[s]}>{s}</Badge>,
+  }));
+  const priorityOptions: InlineSelectOption[] = PRIORITIES.map((p) => {
+    const label = p.charAt(0) + p.slice(1).toLowerCase();
+    return { value: p, label, render: <Badge color={PRIORITY_BADGE_COLOR[p]}>{label}</Badge> };
+  });
+  const issueTypeOptions: InlineSelectOption[] = ISSUE_TYPES.map((t) => {
+    const Icon = ISSUE_TYPE_ICON[t];
+    const label = t.charAt(0) + t.slice(1).toLowerCase();
+    return {
+      value: t,
+      label,
+      render: (
+        <span className="flex items-center gap-1.5">
+          <Icon className="w-4 h-4 text-slate-400" />
+          {label}
+        </span>
+      ),
+    };
+  });
+  const userOptions: InlineSelectOption[] = (orgUsers ?? []).map((u) => ({
+    value: u.id,
+    label: u.name,
+    render: (
+      <span className="flex items-center gap-2">
+        <Avatar name={u.name} size="sm" />
+        {u.name}
+      </span>
+    ),
+  }));
+
   return (
     <div className="space-y-4 max-w-6xl">
       <div>
@@ -293,91 +330,71 @@ export function TaskDetailPage() {
 
         <div className="space-y-4">
           <div className="bg-white border border-slate-200 rounded-md p-4 space-y-4">
-            <label className="block text-sm">
+            <div className="text-sm">
               <span className="text-slate-500 text-xs">Status</span>
-              <Select
+              <InlineSelect
                 value={task.status}
+                options={statusOptions}
                 disabled={!canEdit || updateTask.isPending}
-                onChange={(e) => updateTask.mutate({ status: e.target.value as TaskStatus })}
-              >
-                {TASK_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </Select>
-              <div className="mt-1">
-                <Badge color={STATUS_BADGE_COLOR[task.status]}>{task.status}</Badge>
-              </div>
-            </label>
+                onChange={(v) => updateTask.mutate({ status: v as TaskStatus })}
+              />
+            </div>
 
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide pt-1">Details</h3>
 
-            <label className="block text-sm">
+            <div className="text-sm">
               <span className="text-slate-500 text-xs">Assignee</span>
-              <Select
+              <InlineSelect
                 value={task.assigneeId ?? ''}
+                options={userOptions}
                 disabled={!canManage || updateTask.isPending}
-                onChange={(e) => updateTask.mutate({ assigneeId: e.target.value || null })}
-              >
-                <option value="">Unassigned</option>
-                {orgUsers?.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </Select>
+                allowClear
+                clearLabel="Unassigned"
+                placeholder="Unassigned"
+                onChange={(v) => updateTask.mutate({ assigneeId: v || null })}
+              />
               {canManage && task.assigneeId !== user?.id && (
                 <button
                   type="button"
                   onClick={() => updateTask.mutate({ assigneeId: user!.id })}
                   disabled={updateTask.isPending}
-                  className="text-xs text-brand-600 hover:text-brand-700 font-medium mt-1"
+                  className="text-xs text-brand-600 hover:text-brand-700 font-medium px-1"
                 >
                   Assign to me
                 </button>
               )}
-            </label>
+            </div>
 
             <div className="text-sm">
               <span className="text-slate-500 text-xs">Reporter</span>
-              <p className="text-slate-700 py-1">{task.reporterId ? userName(task.reporterId) : '—'}</p>
+              <InlineSelect
+                value={task.reporterId ?? ''}
+                options={userOptions}
+                disabled={!canManage || updateTask.isPending}
+                placeholder="Unknown"
+                onChange={(v) => updateTask.mutate({ reporterId: v || null })}
+              />
             </div>
 
-            <label className="block text-sm">
+            <div className="text-sm">
               <span className="text-slate-500 text-xs">Priority</span>
-              <Select
+              <InlineSelect
                 value={task.priority}
+                options={priorityOptions}
                 disabled={!canEdit || updateTask.isPending}
-                onChange={(e) => updateTask.mutate({ priority: e.target.value as Priority })}
-              >
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {p.charAt(0) + p.slice(1).toLowerCase()}
-                  </option>
-                ))}
-              </Select>
-              <div className="mt-1">
-                <Badge color={PRIORITY_BADGE_COLOR[task.priority]}>
-                  {task.priority.charAt(0) + task.priority.slice(1).toLowerCase()}
-                </Badge>
-              </div>
-            </label>
+                onChange={(v) => updateTask.mutate({ priority: v as Priority })}
+              />
+            </div>
 
-            <label className="block text-sm">
+            <div className="text-sm">
               <span className="text-slate-500 text-xs">Type</span>
-              <Select
+              <InlineSelect
                 value={task.issueType}
+                options={issueTypeOptions}
                 disabled={!canManage || updateTask.isPending}
-                onChange={(e) => updateTask.mutate({ issueType: e.target.value as IssueType })}
-              >
-                {ISSUE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t.charAt(0) + t.slice(1).toLowerCase()}
-                  </option>
-                ))}
-              </Select>
-            </label>
+                onChange={(v) => updateTask.mutate({ issueType: v as IssueType })}
+              />
+            </div>
 
             <label className="block text-sm">
               <span className="text-slate-500 text-xs">Due date</span>

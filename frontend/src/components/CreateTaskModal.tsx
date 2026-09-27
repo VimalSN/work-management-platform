@@ -6,9 +6,13 @@ import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from './ui/ToastContext';
 import { Button } from './ui/Button';
-import { Input, Select } from './ui/Input';
+import { Input } from './ui/Input';
 import { Modal } from './ui/Modal';
 import { LabelsInput } from './ui/LabelsInput';
+import { Avatar } from './ui/Avatar';
+import { InlineSelect } from './ui/InlineSelect';
+import type { InlineSelectOption } from './ui/InlineSelect';
+import { ISSUE_TYPE_ICON } from '../lib/issueTypeIcons';
 import { ISSUE_TYPES, PRIORITIES } from '../types';
 import type { IssueType, OrgUser, Priority, Task } from '../types';
 
@@ -46,6 +50,35 @@ export function CreateTaskModal({
   const [labels, setLabels] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+
+  const issueTypeOptions: InlineSelectOption[] = ISSUE_TYPES.map((t) => {
+    const Icon = ISSUE_TYPE_ICON[t];
+    const label = t.charAt(0) + t.slice(1).toLowerCase();
+    return {
+      value: t,
+      label,
+      render: (
+        <span className="flex items-center gap-1.5">
+          <Icon className="w-4 h-4 text-slate-400" />
+          {label}
+        </span>
+      ),
+    };
+  });
+  const priorityOptions: InlineSelectOption[] = PRIORITIES.map((p) => ({
+    value: p,
+    label: p.charAt(0) + p.slice(1).toLowerCase(),
+  }));
+  const userOptions: InlineSelectOption[] = orgUsers.map((u) => ({
+    value: u.id,
+    label: u.name,
+    render: (
+      <span className="flex items-center gap-2">
+        <Avatar name={u.name} size="sm" />
+        {u.name}
+      </span>
+    ),
+  }));
 
   function addFiles(newFiles: FileList | null) {
     if (!newFiles) return;
@@ -167,34 +200,33 @@ export function CreateTaskModal({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <label className="block text-sm">
             <span className="text-slate-500 text-xs">Type</span>
-            <Select value={issueType} onChange={(e) => setIssueType(e.target.value as IssueType)}>
-              {ISSUE_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t.charAt(0) + t.slice(1).toLowerCase()}
-                </option>
-              ))}
-            </Select>
+            <InlineSelect
+              variant="bordered"
+              value={issueType}
+              options={issueTypeOptions}
+              onChange={(v) => setIssueType(v as IssueType)}
+            />
           </label>
           <label className="block text-sm">
             <span className="text-slate-500 text-xs">Priority</span>
-            <Select value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
-                  {p.charAt(0) + p.slice(1).toLowerCase()}
-                </option>
-              ))}
-            </Select>
+            <InlineSelect
+              variant="bordered"
+              value={priority}
+              options={priorityOptions}
+              onChange={(v) => setPriority(v as Priority)}
+            />
           </label>
           <label className="block text-sm">
             <span className="text-slate-500 text-xs">Assignee</span>
-            <Select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-              <option value="">Unassigned</option>
-              {orgUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </Select>
+            <InlineSelect
+              variant="bordered"
+              value={assigneeId}
+              options={userOptions}
+              allowClear
+              clearLabel="Unassigned"
+              placeholder="Unassigned"
+              onChange={setAssigneeId}
+            />
             {user && assigneeId !== user.id && (
               <button
                 type="button"

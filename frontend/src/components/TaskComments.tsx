@@ -6,6 +6,7 @@ import { useSocket } from '../socket/SocketContext';
 import { useToast } from './ui/ToastContext';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
+import { Avatar } from './ui/Avatar';
 import type { Comment } from '../types';
 
 export function TaskComments({ taskId, canComment }: { taskId: string; canComment: boolean }) {
@@ -58,15 +59,6 @@ export function TaskComments({ taskId, canComment }: { taskId: string; canCommen
     if (body.trim()) addComment.mutate();
   }
 
-  function initials(name: string) {
-    return name
-      .split(' ')
-      .map((part) => part[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
-  }
-
   function formatTimestamp(iso: string) {
     return new Date(iso).toLocaleString(undefined, {
       month: 'short',
@@ -82,9 +74,7 @@ export function TaskComments({ taskId, canComment }: { taskId: string; canCommen
         {comments?.length === 0 && <p className="text-slate-400">No comments yet.</p>}
         {comments?.map((c) => (
           <div key={c.id} className="flex items-start gap-2">
-            <div className="w-7 h-7 rounded-full bg-brand-100 text-brand-700 text-xs font-medium flex items-center justify-center flex-shrink-0">
-              {initials(c.author.name)}
-            </div>
+            <Avatar name={c.author.name} />
             <div className="flex-1 min-w-0 bg-slate-50 rounded-md px-3 py-2">
               <div className="flex items-baseline gap-2">
                 <span className="font-medium text-slate-800">{c.author.name}</span>
