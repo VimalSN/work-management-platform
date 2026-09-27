@@ -14,7 +14,12 @@ only the product name shown in the app itself changed to Meridian.)
 - Database: PostgreSQL via Prisma
 - Cache/queue: Redis
 - Real-time: Socket.IO
-- Local infra: Docker Compose
+- Testing: Jest + Supertest (unit tests for pure logic, integration tests
+  against a real Postgres/Redis)
+- CI: GitHub Actions (runs the full test suite against real Postgres/Redis
+  service containers, plus builds both Docker images, on every push)
+- Infra: Docker Compose locally; a single-instance Docker Compose deploy on
+  AWS EC2 (see [DEPLOY.md](DEPLOY.md))
 
 ## Local setup
 
@@ -42,15 +47,45 @@ the server, database, and Redis is shown alongside your account info.
 
 ## Project status
 
-Building in phases; see commit history for progress. Current phase: **Phase 7 —
-workload view & basic notifications** (a database-aggregated workload
-dashboard; task-assignment/comment notifications processed by a BullMQ
-worker off the request path, delivered live over the same sockets from
-Phase 6). This was the last phase that adds a user-facing feature - Phase 8
-(tests, Docker, CI, one-time cloud deploy) is entirely behind-the-scenes.
-See [docs/phase-7-workload-notifications.md](docs/phase-7-workload-notifications.md)
+Building in phases; see commit history for progress. Current phase: **Phase 8 —
+tests, Docker, CI, one-time cloud deploy** (entirely behind-the-scenes; Phase 7
+was the last phase to add a user-facing feature). See
+[docs/phase-7-workload-notifications.md](docs/phase-7-workload-notifications.md)
 for the design writeup, and the other `docs/phase-*.md` files for earlier
 phases.
+
+## Tests
+
+```bash
+cd backend
+npm test
+```
+
+Runs both kinds together: pure unit tests (the cycle-detection algorithm,
+JWT signing/verification - no database needed) and integration tests
+(auth flows, optimistic concurrency, cycle detection, idempotency - hitting
+a real Postgres + Redis via `DATABASE_URL`/`REDIS_URL`, same as the app
+itself uses).
+
+To run the integration tests locally (not required just to develop - only
+if you want to run the full suite yourself rather than relying on CI),
+first create a separate test database so `npm test` never touches your own
+dev data:
+
+```bash
+docker compose up -d
+docker compose exec postgres createdb -U postgres workmgmt_test
+```
+
+In CI, GitHub Actions provides its own throwaway Postgres/Redis
+automatically instead (see `.github/workflows/ci.yml`) - that's what
+actually runs on every push, independent of any single developer's machine
+having Docker set up at all.
+
+## Deploying
+
+See [DEPLOY.md](DEPLOY.md) for a one-time deploy of the full stack (Docker
+Compose - Postgres, Redis, backend, frontend) to a single AWS EC2 instance.
 
 ## UI
 
