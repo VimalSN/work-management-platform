@@ -12,17 +12,39 @@ export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
 
 export const TASK_STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'];
 
+export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export const PRIORITIES: Priority[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+
+export type IssueType = 'TASK' | 'BUG' | 'STORY' | 'EPIC';
+
+export const ISSUE_TYPES: IssueType[] = ['TASK', 'BUG', 'STORY', 'EPIC'];
+
 export type Task = {
   id: string;
   title: string;
   description: string | null;
   status: TaskStatus;
+  priority: Priority;
+  issueType: IssueType;
+  dueDate: string | null;
+  labels: string[];
   version: number;
   estimatedHours: number | null;
   projectId: string;
   assigneeId: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type Attachment = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  taskId: string;
+  createdAt: string;
+  uploadedBy: { id: string; name: string };
 };
 
 export type OrgUser = {

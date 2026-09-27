@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
@@ -13,9 +12,8 @@ import { debounce } from '../lib/debounce';
 import { TaskCard } from '../components/TaskCard';
 import { TaskColumn } from '../components/TaskColumn';
 import { TaskDetailModal } from '../components/TaskDetailModal';
-import { Card } from '../components/ui/Card';
+import { CreateTaskModal } from '../components/CreateTaskModal';
 import { Button } from '../components/ui/Button';
-import { Input, Select } from '../components/ui/Input';
 import { TASK_STATUSES } from '../types';
 import type { OrgUser, Project, Task, TaskStatus } from '../types';
 
@@ -98,8 +96,12 @@ export function ProjectDetailPage() {
   }
 
   const updateTask = useMutation({
-    mutationFn: (vars: { taskId: string; data: Partial<Pick<Task, 'status' | 'assigneeId'>> & { version: number } }) =>
-      api.patch(`/tasks/${vars.taskId}`, vars.data),
+    mutationFn: (vars: {
+      taskId: string;
+      data: Partial<Pick<Task, 'status' | 'assigneeId' | 'priority' | 'issueType' | 'dueDate' | 'labels'>> & {
+        version: number;
+      };
+    }) => api.patch(`/tasks/${vars.taskId}`, vars.data),
     onMutate: async (vars) => {
       await queryClient.cancelQueries({ queryKey: ['projects', id, 'tasks'] });
       const previousTasks = queryClient.getQueryData<Task[]>(['projects', id, 'tasks']);
@@ -158,44 +160,7 @@ export function ProjectDetailPage() {
     updateTask.mutate({ taskId, data: { status: newStatus, version: task.version } });
   }
 
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [assigneeId, setAssigneeId] = useState('');
-  const [estimatedHours, setEstimatedHours] = useState('');
-  const [showCreateForm, setShowCreateForm] = useState(false);
-
-  const createTask = useMutation({
-    mutationFn: () =>
-      api.post(
-        `/projects/${id}/tasks`,
-        {
-          title,
-          description: description || undefined,
-          assigneeId: assigneeId || undefined,
-          estimatedHours: estimatedHours ? Number(estimatedHours) : undefined,
-        },
-        // A fresh key per mutate() call - but if axios internally retries this
-        // exact request (e.g. after a 401 triggers a token refresh), the
-        // retry reuses this same request config/header rather than getting a
-        // new one, which is exactly the behavior idempotency keys need.
-        { headers: { 'Idempotency-Key': crypto.randomUUID() } },
-      ),
-    onSuccess: () => {
-      setTitle('');
-      setDescription('');
-      setAssigneeId('');
-      setEstimatedHours('');
-      setShowCreateForm(false);
-      queryClient.invalidateQueries({ queryKey: ['projects', id, 'tasks'] });
-      showToast('success', 'Task created');
-    },
-    onError: () => showToast('error', 'Could not create task'),
-  });
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    createTask.mutate();
-  }
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -208,42 +173,18 @@ export function ProjectDetailPage() {
           {project?.description && <p className="text-sm text-slate-500">{project.description}</p>}
         </div>
         {canManage && (
-          <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowCreateForm((s) => !s)}>
+          <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowCreateModal(true)}>
             New task
           </Button>
         )}
       </div>
 
-      {canManage && showCreateForm && (
-        <Card className="p-4 max-w-md">
-          <form onSubmit={handleSubmit} className="space-y-2">
-            <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
-            <Input
-              placeholder="Description (optional)"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            <Select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-              <option value="">Unassigned</option>
-              {orgUsers?.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.role})
-                </option>
-              ))}
-            </Select>
-            <Input
-              type="number"
-              min="0"
-              step="0.5"
-              placeholder="Estimated hours (optional)"
-              value={estimatedHours}
-              onChange={(e) => setEstimatedHours(e.target.value)}
-            />
-            <Button type="submit" loading={createTask.isPending} className="w-full">
-              Create task
-            </Button>
-          </form>
-        </Card>
+      {showCreateModal && (
+        <CreateTaskModal
+          projectId={id!}
+          orgUsers={orgUsers ?? []}
+          onClose={() => setShowCreateModal(false)}
+        />
       )}
 
       {tasksLoading && <p className="text-slate-500">Loading tasks…</p>}
@@ -289,13 +230,7 @@ export function ProjectDetailPage() {
           canEditStatus={canManage || user?.id === selectedTask.assigneeId}
           canComment={canComment}
           onClose={() => setSelectedTaskId(null)}
-          onUpdateStatus={(status) => updateTask.mutate({ taskId: selectedTask.id, data: { status, version: selectedTask.version } })}
-          onUpdateAssignee={(newAssigneeId) =>
-            updateTask.mutate({
-              taskId: selectedTask.id,
-              data: { assigneeId: newAssigneeId || null, version: selectedTask.version },
-            })
-          }
+          onUpdate={(data) => updateTask.mutate({ taskId: selectedTask.id, data: { ...data, version: selectedTask.version } })}
           onDelete={() => deleteTask.mutate(selectedTask.id)}
           isUpdating={updateTask.isPending}
           isDeleting={deleteTask.isPending}

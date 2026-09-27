@@ -30,6 +30,7 @@ model Organization {
   taskDependencies TaskDependency[]
   comments        Comment[]
   notifications   Notification[]
+  attachments     Attachment[]
 }
 
 model User {
@@ -51,6 +52,7 @@ model User {
   assignedTasks       Task[]
   comments            Comment[]
   notifications       Notification[]
+  uploadedAttachments Attachment[]
 
   @@index([organizationId])
 }
@@ -60,6 +62,20 @@ enum TaskStatus {
   IN_PROGRESS
   IN_REVIEW
   DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueType {
+  TASK
+  BUG
+  STORY
+  EPIC
 }
 
 model Project {
@@ -81,6 +97,17 @@ model Task {
   title          String
   description    String?
   status         TaskStatus @default(TODO)
+  priority       Priority   @default(MEDIUM)
+  issueType      IssueType  @default(TASK)
+  // Date-only in the UI, but stored as a full DateTime - Postgres has no
+  // separate "date" type Prisma maps to something simpler here, and there's
+  // no need for one since this is never compared at sub-day precision.
+  dueDate        DateTime?
+  // Free-form tags (e.g. "frontend", "urgent"). A native Postgres array
+  // column, not a join table - there's no cross-task label management
+  // (rename a label everywhere, list all labels org-wide) that would justify
+  // a normalized Label model, just per-task text.
+  labels         String[]   @default([])
   // Bumped on every update. A write must present the version it read; a
   // mismatch means someone else changed the row in between (see
   // docs/phase-5-optimistic-concurrency.md).
@@ -105,6 +132,7 @@ model Task {
   incomingDependencies TaskDependency[] @relation("DependencyTarget")
   comments             Comment[]
   notifications        Notification[]
+  attachments          Attachment[]
 
   @@index([organizationId])
   @@index([projectId])
@@ -122,6 +150,29 @@ model Comment {
 
   task         Task         @relation(fields: [taskId], references: [id])
   author       User         @relation(fields: [authorId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([taskId])
+  @@index([organizationId])
+}
+
+// Files themselves live on disk (backend/uploads/, see src/lib/storage.ts) -
+// this row is only the metadata. `storedName` is the randomly generated
+// on-disk filename (collision-proof, no path-traversal risk from a user's
+// original filename); `filename` is the original name shown/downloaded-as.
+model Attachment {
+  id             String   @id @default(cuid())
+  filename       String
+  storedName     String   @unique
+  mimeType       String
+  size           Int
+  taskId         String
+  uploadedById   String
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  task         Task         @relation(fields: [taskId], references: [id])
+  uploadedBy   User         @relation(fields: [uploadedById], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([taskId])

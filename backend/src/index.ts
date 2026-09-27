@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import multer from 'multer';
 import { prisma } from './prisma';
 import { redis } from './redis';
 import authRouter from './routes/auth';
@@ -62,6 +63,14 @@ app.get('/health', async (_req, res) => {
 // database being unreachable) falls through to Express's default HTML error
 // page, which also leaks internal file paths and stack traces to the client.
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  // Thrown by upload.single(...) BEFORE the route handler ever runs (e.g. a
+  // file over the size limit) - a real client-side mistake, not a server
+  // fault, so it gets a 400 with a useful message instead of falling
+  // through to the generic 500 below.
+  if (err instanceof multer.MulterError) {
+    res.status(400).json({ error: err.message });
+    return;
+  }
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
 });

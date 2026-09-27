@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Users } from 'lucide-react';
 import { api } from '../lib/api';
-import { CreateTeammateForm } from '../components/CreateTeammateForm';
+import { CreateTeamMemberForm } from '../components/CreateTeamMemberForm';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { ROLE_BADGE_COLOR } from '../lib/badgeColors';
@@ -40,7 +40,7 @@ export function TeamPage() {
       )}
 
       <Card className="p-4">
-        <CreateTeammateForm />
+        <CreateTeamMemberForm />
       </Card>
     </div>
   );

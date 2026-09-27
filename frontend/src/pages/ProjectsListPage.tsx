@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FolderKanban, Trash2 } from 'lucide-react';
+import { FolderKanban, Plus, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/ui/ToastContext';
 import { useConfirm } from '../components/ui/ConfirmContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { RowMenu } from '../components/ui/RowMenu';
+import { CreateProjectModal } from '../components/CreateProjectModal';
 import type { Project } from '../types';
 
 export function ProjectsListPage() {
@@ -25,29 +24,7 @@ export function ProjectsListPage() {
     queryFn: async () => (await api.get<Project[]>('/projects')).data,
   });
 
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-
-  const createProject = useMutation({
-    mutationFn: () =>
-      api.post(
-        '/projects',
-        { name, description: description || undefined },
-        { headers: { 'Idempotency-Key': crypto.randomUUID() } },
-      ),
-    onSuccess: () => {
-      setName('');
-      setDescription('');
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      showToast('success', 'Project created');
-    },
-    onError: () => showToast('error', 'Could not create project'),
-  });
-
-  function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    createProject.mutate();
-  }
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const deleteProject = useMutation({
     mutationFn: (projectId: string) => api.delete(`/projects/${projectId}`),
@@ -76,10 +53,19 @@ export function ProjectsListPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Projects</h1>
-        <p className="text-sm text-slate-500">Everything your organization is working on.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Projects</h1>
+          <p className="text-sm text-slate-500">Everything your organization is working on.</p>
+        </div>
+        {canManage && (
+          <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowCreateModal(true)}>
+            New project
+          </Button>
+        )}
       </div>
+
+      {showCreateModal && <CreateProjectModal onClose={() => setShowCreateModal(false)} />}
 
       {isLoading && <p className="text-slate-500">Loading projects…</p>}
       {projects && projects.length === 0 && <p className="text-slate-500">No projects yet.</p>}
@@ -110,23 +96,6 @@ export function ProjectsListPage() {
             </Card>
           ))}
         </div>
-      )}
-
-      {canManage && (
-        <Card className="p-4 max-w-sm">
-          <form onSubmit={handleSubmit} className="space-y-2">
-            <h2 className="text-sm font-semibold text-slate-700">New project</h2>
-            <Input placeholder="Project name" value={name} onChange={(e) => setName(e.target.value)} required />
-            <Input
-              placeholder="Description (optional)"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            <Button type="submit" loading={createProject.isPending} className="w-full">
-              Create project
-            </Button>
-          </form>
-        </Card>
       )}
     </div>
   );

@@ -12,7 +12,7 @@ const ROLES: Role[] = ['ADMIN', 'MANAGER', 'DEVELOPER', 'VIEWER'];
 // Admin-only widget: proves the authorize() middleware actually works, not
 // just that it exists. A non-admin never sees this - the backend would
 // reject the request with 403 even if they somehow called it directly.
-export function CreateTeammateForm() {
+export function CreateTeamMemberForm() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [name, setName] = useState('');
@@ -28,9 +28,9 @@ export function CreateTeammateForm() {
       setPassword('');
       setRole('DEVELOPER');
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      showToast('success', 'Teammate added');
+      showToast('success', 'Team member added');
     },
-    onError: () => showToast('error', 'Could not add teammate'),
+    onError: () => showToast('error', 'Could not add team member'),
   });
 
   function handleSubmit(e: FormEvent) {
@@ -40,7 +40,7 @@ export function CreateTeammateForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-2">
-      <h2 className="text-sm font-semibold text-slate-700">Add a teammate (Admin only)</h2>
+      <h2 className="text-sm font-semibold text-slate-700">Add a team member (Admin only)</h2>
       <Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} required />
       <Input
         type="email"
@@ -65,7 +65,7 @@ export function CreateTeammateForm() {
         ))}
       </Select>
       <Button type="submit" loading={mutation.isPending} className="w-full">
-        Add teammate
+        Add team member
       </Button>
     </form>
   );

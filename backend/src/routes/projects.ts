@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { Role, TaskStatus } from '@prisma/client';
+import { IssueType, Priority, Role, TaskStatus } from '@prisma/client';
 import { prisma } from '../prisma';
 import { AuthenticatedRequest, authenticate, authorize } from '../middleware/auth';
 import { idempotent } from '../middleware/idempotency';
@@ -132,6 +132,10 @@ const createTaskSchema = z.object({
   description: z.string().max(5000).optional(),
   assigneeId: z.string().optional(),
   estimatedHours: z.number().positive().max(1000).optional(),
+  priority: z.nativeEnum(Priority).optional(),
+  issueType: z.nativeEnum(IssueType).optional(),
+  dueDate: z.coerce.date().optional(),
+  labels: z.array(z.string().min(1).max(40)).max(10).optional(),
 });
 
 router.post(
@@ -171,6 +175,10 @@ router.post(
         description: parsed.data.description,
         assigneeId: parsed.data.assigneeId,
         estimatedHours: parsed.data.estimatedHours,
+        priority: parsed.data.priority,
+        issueType: parsed.data.issueType,
+        dueDate: parsed.data.dueDate,
+        labels: parsed.data.labels,
         projectId: project.id,
         organizationId: req.user!.organizationId,
       },

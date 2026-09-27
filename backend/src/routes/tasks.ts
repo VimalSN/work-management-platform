@@ -1,8 +1,12 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { Router } from 'express';
 import { z } from 'zod';
-import { Prisma, Role, TaskStatus } from '@prisma/client';
+import { IssueType, Prisma, Priority, Role, TaskStatus } from '@prisma/client';
 import { prisma } from '../prisma';
 import { AuthenticatedRequest, authenticate, authorize } from '../middleware/auth';
+import { upload } from '../middleware/upload';
+import { UPLOADS_DIR } from '../lib/storage';
 import { hasCycle } from '../lib/graph';
 import type { Edge } from '../lib/graph';
 import { emitToProject } from '../realtime';
@@ -60,6 +64,10 @@ const updateTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(5000).nullable().optional(),
   status: z.nativeEnum(TaskStatus).optional(),
+  priority: z.nativeEnum(Priority).optional(),
+  issueType: z.nativeEnum(IssueType).optional(),
+  dueDate: z.coerce.date().nullable().optional(),
+  labels: z.array(z.string().min(1).max(40)).max(10).optional(),
   assigneeId: z.string().nullable().optional(),
   estimatedHours: z.number().positive().max(1000).nullable().optional(),
   // Required: the version the client last read, so a stale write can be
@@ -98,10 +106,12 @@ router.patch('/:id', async (req: AuthenticatedRequest, res) => {
 
   const { version: clientVersion, ...data } = parsed.data;
   if (!isManager) {
-    // A Developer may update status/description on their own task, but
-    // renaming it or reassigning it to someone else is a Manager/Admin action.
+    // A Developer may update status/priority/due date/labels/description on
+    // their own task, but renaming it, reassigning it, or changing what kind
+    // of issue it is are structural decisions reserved for Manager/Admin.
     delete data.title;
     delete data.assigneeId;
+    delete data.issueType;
   }
 
   if (data.assigneeId) {
@@ -384,6 +394,113 @@ router.post(
     }
 
     res.status(201).json(comment);
+  },
+);
+
+router.get('/:id/attachments', async (req: AuthenticatedRequest, res) => {
+  const taskId = String(req.params.id);
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, organizationId: req.user!.organizationId },
+  });
+  if (!task) {
+    res.status(404).json({ error: 'Task not found' });
+    return;
+  }
+
+  const attachments = await prisma.attachment.findMany({
+    where: { taskId },
+    include: { uploadedBy: { select: { id: true, name: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(attachments);
+});
+
+// Viewer excluded, same as comments - attaching a file is a write action,
+// not part of "read-only access to project progress."
+router.post(
+  '/:id/attachments',
+  authorize(Role.ADMIN, Role.MANAGER, Role.DEVELOPER),
+  upload.single('file'),
+  async (req: AuthenticatedRequest, res) => {
+    const taskId = String(req.params.id);
+    const task = await prisma.task.findFirst({
+      where: { id: taskId, organizationId: req.user!.organizationId },
+    });
+    if (!task) {
+      // multer already wrote the file to disk before this handler ran - a
+      // task that turns out not to exist (or belong to another org) would
+      // otherwise leak an orphaned file with nothing ever pointing at it.
+      if (req.file) await fs.promises.unlink(req.file.path).catch(() => {});
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ error: 'No file uploaded' });
+      return;
+    }
+
+    const attachment = await prisma.attachment.create({
+      data: {
+        filename: req.file.originalname,
+        storedName: req.file.filename,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+        taskId: task.id,
+        uploadedById: req.user!.id,
+        organizationId: req.user!.organizationId,
+      },
+      include: { uploadedBy: { select: { id: true, name: true } } },
+    });
+    emitToProject(task.projectId, 'attachment:created', attachment);
+    res.status(201).json(attachment);
+  },
+);
+
+router.get('/:id/attachments/:attachmentId/download', async (req: AuthenticatedRequest, res) => {
+  const attachment = await prisma.attachment.findFirst({
+    where: {
+      id: String(req.params.attachmentId),
+      taskId: String(req.params.id),
+      organizationId: req.user!.organizationId,
+    },
+  });
+  if (!attachment) {
+    res.status(404).json({ error: 'Attachment not found' });
+    return;
+  }
+  res.download(path.join(UPLOADS_DIR, attachment.storedName), attachment.filename);
+});
+
+router.delete(
+  '/:id/attachments/:attachmentId',
+  authorize(Role.ADMIN, Role.MANAGER, Role.DEVELOPER),
+  async (req: AuthenticatedRequest, res) => {
+    const attachment = await prisma.attachment.findFirst({
+      where: {
+        id: String(req.params.attachmentId),
+        taskId: String(req.params.id),
+        organizationId: req.user!.organizationId,
+      },
+      include: { task: { select: { projectId: true } } },
+    });
+    if (!attachment) {
+      res.status(404).json({ error: 'Attachment not found' });
+      return;
+    }
+
+    const { role, id: userId } = req.user!;
+    const isManager = role === Role.ADMIN || role === Role.MANAGER;
+    // Same shape as the task-update rule: a Manager/Admin can remove
+    // anything, anyone else only what they themselves uploaded.
+    if (!isManager && attachment.uploadedById !== userId) {
+      res.status(403).json({ error: 'You can only remove attachments you uploaded' });
+      return;
+    }
+
+    await prisma.attachment.delete({ where: { id: attachment.id } });
+    await fs.promises.unlink(path.join(UPLOADS_DIR, attachment.storedName)).catch(() => {});
+    emitToProject(attachment.task.projectId, 'attachment:deleted', { id: attachment.id, taskId: attachment.taskId });
+    res.status(204).send();
   },
 );
 
