@@ -327,6 +327,16 @@ export function TaskDetailPage() {
                   </option>
                 ))}
               </Select>
+              {canManage && task.assigneeId !== user?.id && (
+                <button
+                  type="button"
+                  onClick={() => updateTask.mutate({ assigneeId: user!.id })}
+                  disabled={updateTask.isPending}
+                  className="text-xs text-brand-600 hover:text-brand-700 font-medium mt-1"
+                >
+                  Assign to me
+                </button>
+              )}
             </label>
 
             <div className="text-sm">

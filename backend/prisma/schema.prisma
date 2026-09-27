@@ -166,7 +166,11 @@ model Comment {
   organizationId String
   createdAt      DateTime @default(now())
 
-  task         Task         @relation(fields: [taskId], references: [id])
+  // Deleting a task takes its comments with it - a comment has no meaning
+  // once the thing it's commenting on is gone. (This is also what fixes
+  // task deletion previously failing outright whenever a task had any
+  // comments at all - the default is RESTRICT, not cascade.)
+  task         Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
   author       User         @relation(fields: [authorId], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
 
@@ -189,7 +193,10 @@ model Attachment {
   organizationId String
   createdAt      DateTime @default(now())
 
-  task         Task         @relation(fields: [taskId], references: [id])
+  // The DB row cascades with the task; the physical file on disk does not
+  // (Postgres has no idea backend/uploads/ exists) - the task-delete route
+  // deletes those files itself before removing the task.
+  task         Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
   uploadedBy   User         @relation(fields: [uploadedById], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
 
@@ -217,7 +224,11 @@ model Notification {
 
   user         User         @relation(fields: [userId], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
-  task         Task?        @relation(fields: [taskId], references: [id])
+  // Unlike Comment/Attachment, a notification isn't really "about" the
+  // task's continued existence - it's a historical record ("you were
+  // assigned to X"). Deleting the task detaches the link (taskId was
+  // already optional) rather than deleting someone's notification history.
+  task         Task?        @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([organizationId])
@@ -240,9 +251,12 @@ model TaskDependency {
   relatedTaskId  String
   createdAt      DateTime       @default(now())
 
+  // Deleting either side of a dependency link takes the link with it - a
+  // "blocks"/"relates to"/"duplicates" edge referencing a task that no
+  // longer exists isn't a link worth keeping.
   organization Organization @relation(fields: [organizationId], references: [id])
-  task         Task         @relation("DependencySource", fields: [taskId], references: [id])
-  relatedTask  Task         @relation("DependencyTarget", fields: [relatedTaskId], references: [id])
+  task         Task         @relation("DependencySource", fields: [taskId], references: [id], onDelete: Cascade)
+  relatedTask  Task         @relation("DependencyTarget", fields: [relatedTaskId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, relatedTaskId, type])
   @@index([organizationId])

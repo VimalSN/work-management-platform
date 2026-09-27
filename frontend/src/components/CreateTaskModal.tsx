@@ -3,6 +3,7 @@ import type { DragEvent, FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, UploadCloud, X } from 'lucide-react';
 import { api } from '../lib/api';
+import { useAuth } from '../auth/AuthContext';
 import { useToast } from './ui/ToastContext';
 import { Button } from './ui/Button';
 import { Input, Select } from './ui/Input';
@@ -26,6 +27,7 @@ export function CreateTaskModal({
   orgUsers: OrgUser[];
   onClose: () => void;
 }) {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -193,6 +195,15 @@ export function CreateTaskModal({
                 </option>
               ))}
             </Select>
+            {user && assigneeId !== user.id && (
+              <button
+                type="button"
+                onClick={() => setAssigneeId(user.id)}
+                className="text-xs text-brand-600 hover:text-brand-700 font-medium mt-1"
+              >
+                Assign to me
+              </button>
+            )}
           </label>
           <label className="block text-sm">
             <span className="text-slate-500 text-xs">Due date</span>

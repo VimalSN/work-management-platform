@@ -170,13 +170,20 @@ router.patch('/:id', async (req: AuthenticatedRequest, res) => {
 router.delete('/:id', authorize(Role.ADMIN, Role.MANAGER), async (req: AuthenticatedRequest, res) => {
   const task = await prisma.task.findFirst({
     where: { id: String(req.params.id), organizationId: req.user!.organizationId },
+    include: { attachments: { select: { storedName: true } } },
   });
   if (!task) {
     res.status(404).json({ error: 'Task not found' });
     return;
   }
 
+  // Comments, dependency links, and attachment ROWS cascade at the database
+  // level (see schema.prisma) - this only has to clean up what the database
+  // can't reach: the actual files sitting in backend/uploads/.
   await prisma.task.delete({ where: { id: task.id } });
+  await Promise.all(
+    task.attachments.map((a) => fs.promises.unlink(path.join(UPLOADS_DIR, a.storedName)).catch(() => {})),
+  );
   emitToProject(task.projectId, 'task:deleted', { id: task.id });
   res.status(204).send();
 });
