@@ -10,8 +10,14 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    // This is now purely a type-checking config, for the editor and for CI's
+    // typecheck step (`tsc -b`) - it's never what actually produces dist/.
+    // See tsconfig.build.json for that. Test files being excluded from
+    // this one (they used to be) was exactly what broke @types/jest's
+    // globals (describe/it/expect) in the editor - an excluded file gets
+    // no project at all, not just "the production one minus tests."
+    "noEmit": true
   },
-  "include": ["src"],
-  "exclude": ["src/**/__tests__/**"]
+  "include": ["src"]
 }
